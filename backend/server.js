@@ -290,3 +290,6 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Server siap melayani di port ${PORT}`);
 });
+
+// UNTUK DEPLOY DI VERCEL 👇
+module.exports = app;
