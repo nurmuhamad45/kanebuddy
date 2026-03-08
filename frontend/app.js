@@ -2311,7 +2311,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // =====================================================================
 // NODE.JS BACKEND INTEGRATION
 // =====================================================================
-const API_URL = 'https://https://kanebuddy-bxvn.vercel.app/api/transactions';
+const API_URL = 'https://kanebuddy-bxvn.vercel.app/api/transactions';
 
 // 1. Fungsi MENGAMBIL data dari MySQL
 async function getTransactionsFromDB() {
@@ -2377,8 +2377,8 @@ document.addEventListener('DOMContentLoaded', () => {
 // ==========================================
 // API UNTUK GOALS & BILLS
 // ==========================================
-const GOALS_API = 'https://https://kanebuddy-bxvn.vercel.app/api/goals';
-const BILLS_API = 'https://https://kanebuddy-bxvn.vercel.app/api/bills';
+const GOALS_API = 'https://kanebuddy-bxvn.vercel.app/api/goals';
+const BILLS_API = 'https://kanebuddy-bxvn.vercel.app/api/bills';
 
 // --- FUNGSI GOALS ---
 async function getGoalsFromDB() {
@@ -2468,7 +2468,7 @@ async function deleteBill(id) {
 // ==========================================
 // API UNTUK SHIFT KERJA
 // ==========================================
-const SHIFTS_API = 'https://https://kanebuddy-bxvn.vercel.app/api/shifts';
+const SHIFTS_API = 'https://kanebuddy-bxvn.vercel.app/api/shifts';
 
 // 1. Ambil data Shift dari Database
 async function getShiftsFromDB() {
@@ -2543,7 +2543,7 @@ async function deleteShift(id) {
 // ==========================================
 // API UNTUK TASKS & PROJECT
 // ==========================================
-const TASKS_API = 'https://https://kanebuddy-bxvn.vercel.app/api/tasks';
+const TASKS_API = 'https://kanebuddy-bxvn.vercel.app/api/tasks';
 
 // 1. Ambil data Task dari Database
 async function getTasksFromDB() {
