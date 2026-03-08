@@ -1,0 +1,1672 @@
+<!doctype html>
+<html lang="en" class="light">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KaneBuddy Budget Management</title>
+  <!-- Tailwind CSS (via CDN) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ["Google Sans", "Open Sans", "sans-serif"],
+          },
+          colors: {
+            primary: "#6366f1", // Indigo 500
+            "primary-hover": "#4f46e5", // Indigo 600
+            secondary: "#ec4899", // Pink 500
+            dark: {
+              bg: "#0f172a", // Slate 900
+              surface: "#1e293b", // Slate 800
+              border: "#334155", // Slate 700
+            },
+            light: {
+              bg: "#f8fafc", // Slate 50
+              surface: "#ffffff",
+              border: "#e2e8f0", // Slate 200
+            },
+          },
+          animation: {
+            "fade-in": "fadeIn 0.3s ease-out forwards",
+            "slide-up": "slideUp 0.4s ease-out forwards",
+          },
+          keyframes: {
+            fadeIn: {
+              "0%": { opacity: "0" },
+              "100%": { opacity: "1" },
+            },
+            slideUp: {
+              "0%": { opacity: "0", transform: "translateY(20px)" },
+              "100%": { opacity: "1", transform: "translateY(0)" },
+            },
+          },
+        },
+      },
+    };
+  </script>
+  <!-- Google Fonts: Google Sans approximation (Product Sans/Open Sans or similar since official Google Sans is proprietary, but we can try to use it if locally cached or use a close alternative like Open Sans/Nunito) -->
+  <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;500;600;700;800&display=swap"
+    rel="stylesheet" />
+  <style>
+    /* Try to use Google Sans if available, fallback to Open Sans */
+    @font-face {
+      font-family: 'Google Sans';
+      font-style: auto;
+      font-weight: 100 900;
+      src: local('Google Sans'), local('Product Sans'), url('https://fonts.gstatic.com/s/productsans/v5/HYvgU2fE2nRJvZ5JFAumwegdm0LZdjqr5-oayXSOefg.woff2') format('woff2');
+    }
+
+    body {
+      font-family: "Google Sans", "Open Sans", sans-serif;
+    }
+  </style>
+  <!-- Phosphor Icons -->
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <!-- Export Libraries -->
+  <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+  <link rel="stylesheet" href="style.css" />
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body
+  class="bg-light-bg dark:bg-dark-bg text-slate-800 dark:text-slate-200 transition-colors duration-300 antialiased overflow-hidden flex h-screen">
+
+  <!-- ===== AUTH SCREEN ===== -->
+  <div id="auth-screen" class="fixed inset-0 z-[200] flex bg-white dark:bg-slate-900 overflow-hidden animate-fade-in">
+    <!-- Left: Branding & Graphic (Hidden on mobile) -->
+    <div class="hidden lg:flex lg:w-1/2 relative flex-col justify-between p-12 bg-slate-900 border-r border-slate-800">
+      <!-- Background Image with Overlay -->
+      <div class="absolute inset-0 z-0">
+        <img src="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2564&auto=format&fit=crop"
+          class="w-full h-full object-cover opacity-40 mix-blend-screen" alt="Abstract gradient" />
+        <div class="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent"></div>
+      </div>
+
+      <div class="relative z-10 flex items-center gap-3">
+        <div
+          class="w-12 h-12 bg-white/10 backdrop-blur-md rounded-xl flex items-center justify-center border border-white/20">
+          <i class="ph-fill ph-coin text-white text-2xl drop-shadow-md"></i>
+        </div>
+        <span class="text-2xl font-bold text-white tracking-tight">KaneBuddy</span>
+      </div>
+
+      <div class="relative z-10 max-w-md">
+        <h1 class="text-5xl font-bold text-white leading-tight mb-6 tracking-tight">Kelola keuanganmu menjadi lebih
+          cerdas.</h1>
+        <p class="text-lg text-slate-300 font-light">Pantau pengeluaran, capai target tabungan, dan wujudkan kebebasan
+          finansialmu bersama KaneBuddy.</p>
+
+        <div class="flex items-center gap-4 mt-8 pt-8 border-t border-white/10">
+          <div class="flex -space-x-3">
+            <img src="https://i.pravatar.cc/100?img=1" class="w-10 h-10 rounded-full border-2 border-slate-900" />
+            <img src="https://i.pravatar.cc/100?img=5" class="w-10 h-10 rounded-full border-2 border-slate-900" />
+            <img src="https://i.pravatar.cc/100?img=8" class="w-10 h-10 rounded-full border-2 border-slate-900" />
+          </div>
+          <p class="text-sm text-slate-400">Bergabung dengan <span class="text-white font-semibold">10.000+</span>
+            pengguna lainnya.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Forms -->
+    <div class="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-12 relative bg-white dark:bg-slate-900">
+      <!-- Decoration for mobile -->
+      <div class="lg:hidden absolute top-0 inset-x-0 h-40 bg-gradient-to-b from-primary/10 to-transparent"></div>
+
+      <div class="w-full max-w-[420px] relative z-10">
+
+        <!-- Mobile Header (hidden on large desktop) -->
+        <div class="lg:hidden flex flex-col items-center justify-center mb-8 mt-4">
+          <div
+            class="w-16 h-16 bg-gradient-to-br from-primary to-purple-600 rounded-2xl flex items-center justify-center mb-4 shadow-lg shadow-primary/30">
+            <i class="ph-fill ph-coin text-white text-3xl"></i>
+          </div>
+          <h2 class="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">KaneBuddy</h2>
+        </div>
+
+        <div class="mb-8">
+          <h2 class="text-3xl font-bold text-slate-900 dark:text-white tracking-tight mb-2">Selamat Datang! 👋</h2>
+          <p class="text-slate-500 dark:text-slate-400">Silakan masuk atau daftar untuk melanjutkan.</p>
+        </div>
+
+        <!-- Pill Tab Switcher -->
+        <div id="auth-tab-indicator"
+          class="flex p-1.5 bg-slate-100 dark:bg-slate-800 rounded-xl mb-8 border border-slate-200 dark:border-slate-700 relative">
+          <div id="tab-pill"
+            class="absolute top-1.5 bottom-1.5 left-1.5 right-[50%] bg-white dark:bg-slate-700 rounded-lg shadow transition-all duration-300 ease-in-out">
+          </div>
+          <button id="tab-login" onclick="showAuthTab('login')" type="button"
+            class="relative z-10 flex-1 py-2 rounded-lg text-sm font-bold transition-colors text-slate-900 dark:text-white">Masuk</button>
+          <button id="tab-register" onclick="showAuthTab('register')" type="button"
+            class="relative z-10 flex-1 py-2 rounded-lg text-sm font-semibold transition-colors text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300">Daftar</button>
+        </div>
+
+        <!-- Login Form -->
+        <form id="form-login" onsubmit="handleLogin(event)" class="space-y-5">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Email address</label>
+            <div class="relative group">
+              <i
+                class="ph ph-envelope absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors text-lg"></i>
+              <input id="login-email" type="email" placeholder="nama@email.com" required
+                class="w-full pl-12 pr-4 py-3.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 text-sm transition-all shadow-sm" />
+            </div>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Password</label>
+            <div class="relative group">
+              <i
+                class="ph ph-lock absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors text-lg"></i>
+              <input id="login-password" type="password" placeholder="••••••••" required
+                class="w-full pl-12 pr-4 py-3.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 text-sm transition-all shadow-sm" />
+            </div>
+            <div class="flex justify-end mt-2">
+              <a href="#"
+                class="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors">Lupa
+                sandi?</a>
+            </div>
+          </div>
+          <div id="login-error"
+            class="hidden text-sm text-rose-600 bg-rose-50 dark:bg-rose-500/10 px-4 py-3 rounded-xl flex items-center gap-2 border border-rose-100 dark:border-rose-500/20">
+            <i class="ph ph-warning-circle flex-shrink-0 text-base"></i><span></span>
+          </div>
+          <button type="submit"
+            class="w-full bg-slate-900 dark:bg-white hover:bg-slate-800 dark:hover:bg-slate-100 text-white dark:text-slate-900 py-3.5 rounded-xl font-bold transition-all shadow mt-4 flex items-center justify-center gap-2">
+            <span>Masuk ke Akun</span>
+            <i class="ph ph-arrow-right"></i>
+          </button>
+        </form>
+
+        <!-- Register Form -->
+        <form id="form-register" onsubmit="handleRegister(event)" class="space-y-4 hidden">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Nama Lengkap</label>
+            <div class="relative group">
+              <i
+                class="ph ph-user absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors text-lg"></i>
+              <input id="reg-name" type="text" placeholder="Nama Anda" required
+                class="w-full pl-12 pr-4 py-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 text-sm transition-all shadow-sm" />
+            </div>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Email address</label>
+            <div class="relative group">
+              <i
+                class="ph ph-envelope absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors text-lg"></i>
+              <input id="reg-email" type="email" placeholder="nama@email.com" required
+                class="w-full pl-12 pr-4 py-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 text-sm transition-all shadow-sm" />
+            </div>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Password</label>
+            <div class="relative group">
+              <i
+                class="ph ph-lock absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors text-lg"></i>
+              <input id="reg-password" type="password" placeholder="Min. 6 karakter" required minlength="6"
+                class="w-full pl-12 pr-4 py-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 text-sm transition-all shadow-sm" />
+            </div>
+          </div>
+          <div id="reg-error"
+            class="hidden text-sm text-rose-600 bg-rose-50 dark:bg-rose-500/10 px-4 py-3 rounded-xl flex items-center gap-2 border border-rose-100 dark:border-rose-500/20">
+            <i class="ph ph-warning-circle flex-shrink-0 text-base"></i><span></span>
+          </div>
+          <button type="submit"
+            class="w-full bg-slate-900 dark:bg-white hover:bg-slate-800 dark:hover:bg-slate-100 text-white dark:text-slate-900 py-3.5 rounded-xl font-bold transition-all shadow mt-4 flex items-center justify-center gap-2">
+            <span>Buat Akun Gratis</span>
+            <i class="ph ph-arrow-right"></i>
+          </button>
+        </form>
+
+        <p class="text-xs text-center text-slate-500 mt-8">Dengan masuk, Anda menyetujui <a href="#"
+            class="text-slate-900 dark:text-white font-medium hover:underline">Ketentuan Layanan</a> dan <a href="#"
+            class="text-slate-900 dark:text-white font-medium hover:underline">Kebijakan Privasi</a> kami.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== EXPORT MODAL ===== -->
+  <div id="export-modal" class="fixed inset-0 z-[150] hidden flex items-center justify-center">
+    <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="closeExportModal()"></div>
+    <div
+      class="relative bg-white dark:bg-dark-surface rounded-3xl shadow-2xl w-full max-w-lg mx-4 animate-fade-in overflow-hidden">
+      <!-- Header -->
+      <div class="bg-gradient-to-r from-primary to-purple-600 p-7 text-white">
+        <div class="flex items-center justify-between">
+          <div>
+            <h3 class="text-xl font-bold">Export Laporan</h3>
+            <p class="text-indigo-200 text-sm mt-1">Unduh laporan keuangan Anda</p>
+          </div>
+          <button onclick="closeExportModal()" class="p-2 rounded-xl bg-white/20 hover:bg-white/30 transition-colors"><i
+              class="ph ph-x text-xl"></i></button>
+        </div>
+        <!-- Period tabs -->
+        <div class="flex gap-2 mt-5">
+          <button onclick="setExportPeriod('weekly')" id="exp-btn-weekly"
+            class="export-period-btn px-4 py-2 rounded-full text-sm font-medium bg-white text-primary transition-all">Mingguan</button>
+          <button onclick="setExportPeriod('monthly')" id="exp-btn-monthly"
+            class="export-period-btn px-4 py-2 rounded-full text-sm font-medium bg-white/20 text-white transition-all">Bulanan</button>
+          <button onclick="setExportPeriod('yearly')" id="exp-btn-yearly"
+            class="export-period-btn px-4 py-2 rounded-full text-sm font-medium bg-white/20 text-white transition-all">Tahunan</button>
+          <button onclick="setExportPeriod('custom')" id="exp-btn-custom"
+            class="export-period-btn px-4 py-2 rounded-full text-sm font-medium bg-white/20 text-white transition-all">Custom</button>
+        </div>
+      </div>
+      <div class="p-7">
+        <!-- Custom date range (hidden by default) -->
+        <div id="custom-date-range" class="hidden mb-5">
+          <p class="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Rentang Tanggal</p>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="text-xs text-slate-500 mb-1 block">Dari</label>
+              <input id="export-date-from" type="date"
+                class="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-light-border dark:border-dark-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" />
+            </div>
+            <div>
+              <label class="text-xs text-slate-500 mb-1 block">Sampai</label>
+              <input id="export-date-to" type="date"
+                class="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-light-border dark:border-dark-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" />
+            </div>
+          </div>
+        </div>
+        <!-- Included data -->
+        <div class="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-4 mb-6">
+          <p class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">Termasuk
+            dalam export</p>
+          <div class="grid grid-cols-2 gap-2">
+            <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer"><input
+                type="checkbox" id="exp-include-tx" checked class="accent-primary" /> Transaksi</label>
+            <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer"><input
+                type="checkbox" id="exp-include-bills" checked class="accent-primary" /> Tagihan</label>
+            <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer"><input
+                type="checkbox" id="exp-include-shifts" checked class="accent-primary" /> Shift Kerja</label>
+            <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer"><input
+                type="checkbox" id="exp-include-goals" checked class="accent-primary" /> Goals</label>
+          </div>
+        </div>
+        <!-- Buttons -->
+        <div class="grid grid-cols-2 gap-3">
+          <button onclick="exportExcel()"
+            class="flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white py-3.5 rounded-2xl font-semibold transition-colors shadow-lg shadow-emerald-500/30">
+            <i class="ph ph-file-xls text-xl"></i> Excel (.xlsx)
+          </button>
+          <button onclick="exportPDF()"
+            class="flex items-center justify-center gap-2 bg-rose-500 hover:bg-rose-600 text-white py-3.5 rounded-2xl font-semibold transition-colors shadow-lg shadow-rose-500/30">
+            <i class="ph ph-file-pdf text-xl"></i> PDF (.pdf)
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sidebar -->
+  <aside id="sidebar-desktop"
+    class="w-64 bg-light-surface dark:bg-dark-surface border-r border-light-border dark:border-dark-border flex flex-col transition-all duration-300 z-50 hidden md:flex h-full overflow-hidden shrink-0">
+    <!-- Logo -->
+    <div class="h-16 flex items-center px-6 border-b border-light-border dark:border-dark-border shrink-0">
+      <div class="flex items-center gap-3 text-primary">
+        <i class="ph-fill ph-coin text-3xl shrink-0"></i>
+        <span class="sidebar-text text-xl font-bold tracking-tight text-slate-900 dark:text-white truncate">Kane<span
+            class="text-primary hover:text-secondary transition-colors cursor-pointer">Buddy</span></span>
+      </div>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="flex-1 min-h-0 py-6 px-4 space-y-2">
+      <a href="#" data-view="dashboard" title="Dashboard"
+        class="nav-item active flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200">
+        <i class="ph ph-squares-four text-xl shrink-0"></i>
+        <span class="sidebar-text font-medium truncate">Dashboard</span>
+      </a>
+      <a href="#" data-view="pemasukan" title="Pemasukan"
+        class="nav-item flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 transition-all duration-200">
+        <i class="ph ph-arrow-circle-down text-xl text-emerald-500 shrink-0"></i>
+        <span class="sidebar-text font-medium truncate">Pemasukan</span>
+      </a>
+      <a href="#" data-view="pengeluaran" title="Pengeluaran"
+        class="nav-item flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 transition-all duration-200">
+        <i class="ph ph-arrow-circle-up text-xl text-rose-500 shrink-0"></i>
+        <span class="sidebar-text font-medium truncate">Pengeluaran</span>
+      </a>
+      <a href="#" data-view="goals" title="Goals"
+        class="nav-item flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 transition-all duration-200">
+        <i class="ph ph-target text-xl text-primary shrink-0"></i>
+        <span class="sidebar-text font-medium truncate">Goals</span>
+      </a>
+      <a href="#" data-view="bills" title="Bills"
+        class="nav-item flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 transition-all duration-200">
+        <i class="ph ph-receipt text-xl text-amber-500 shrink-0"></i>
+        <span class="sidebar-text font-medium truncate">Bills</span>
+      </a>
+      <a href="#" data-view="shift" title="Shift Kerja"
+        class="nav-item flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 transition-all duration-200">
+        <i class="ph ph-calendar-check text-xl text-indigo-500 shrink-0"></i>
+        <span class="sidebar-text font-medium truncate">Shift Kerja</span>
+      </a>
+      <a href="#" data-view="task" title="Task"
+        class="nav-item flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 transition-all duration-200">
+        <i class="ph ph-check-square-offset text-xl text-sky-500 shrink-0"></i>
+        <span class="sidebar-text font-medium truncate">Task</span>
+      </a>
+      <a href="#" data-view="settings" title="Pengaturan"
+        class="nav-item flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 transition-all duration-200">
+        <i class="ph ph-gear text-xl text-slate-400 shrink-0"></i>
+        <span class="sidebar-text font-medium truncate">Pengaturan</span>
+      </a>
+
+      <div class="pt-4 mt-2 border-t border-light-border dark:border-dark-border">
+        <button onclick="exportModal()" title="Export Laporan"
+          class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-emerald-50 dark:hover:bg-emerald-500/10 text-emerald-600 dark:text-emerald-500 transition-colors">
+          <i class="ph ph-export text-xl shrink-0"></i>
+          <span class="sidebar-text font-medium truncate">Export Laporan</span>
+        </button>
+      </div>
+    </nav>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="flex-1 flex flex-col h-screen relative overflow-hidden">
+    <!-- Mobile Header (Hidden on md+) -->
+    <header
+      class="md:hidden h-20 bg-light-surface dark:bg-dark-surface border-b border-light-border dark:border-dark-border flex items-center justify-between px-6 z-20">
+      <div class="flex items-center gap-2 text-primary">
+        <i class="ph-fill ph-coin text-3xl"></i>
+        <span class="text-xl font-bold text-slate-900 dark:text-white">KaneBuddy</span>
+      </div>
+      <div class="flex items-center gap-1">
+        <button onclick="logout()" class="p-2 text-rose-500">
+          <i class="ph ph-sign-out text-2xl"></i>
+        </button>
+        <button id="mobile-menu-btn"
+          class="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+          <i class="ph ph-list text-2xl"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- Topbar (Desktop) -->
+    <header
+      class="hidden md:flex h-16 items-center justify-between px-8 border-b border-light-border dark:border-dark-border bg-light-bg/90 dark:bg-dark-bg/90 backdrop-blur-md z-10 sticky top-0">
+      <div class="flex items-center gap-4">
+        <button id="desktop-menu-btn" title="Toggle Sidebar"
+          class="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-primary hover:bg-primary/20 transition-colors shadow-sm">
+          <i class="ph ph-list text-xl"></i>
+        </button>
+        <div>
+          <h1 id="page-title" class="text-xl font-bold text-slate-900 dark:text-white capitalize">Dashboard</h1>
+          <p id="page-date" class="text-xs text-slate-400">Loading...</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        <!-- Dark Mode Toggle -->
+        <button id="theme-toggle" title="Toggle Theme"
+          class="p-2.5 rounded-xl bg-white dark:bg-dark-surface border border-light-border dark:border-dark-border hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+          <i class="ph ph-moon dark:hidden text-lg text-slate-500"></i>
+          <i class="ph ph-sun hidden dark:block text-lg text-yellow-400"></i>
+        </button>
+
+        <div class="w-px h-6 bg-light-border dark:bg-dark-border mx-1"></div>
+
+        <!-- User Profile -->
+        <div id="sidebar-user" class="flex items-center gap-3 pl-1">
+          <div class="text-right hidden lg:block">
+            <p id="sidebar-name"
+              class="text-sm font-semibold text-slate-900 dark:text-white md:w-auto truncate max-w-[120px]">User</p>
+            <p id="sidebar-email" class="text-xs text-slate-500 dark:text-slate-400 md:w-auto truncate max-w-[140px]">
+              email@email.com</p>
+          </div>
+          <img id="sidebar-avatar" src="https://ui-avatars.com/api/?name=U&background=6366f1&color=fff"
+            class="w-9 h-9 rounded-full border border-primary/30" alt="Avatar" />
+        </div>
+
+        <!-- Logout -->
+        <button onclick="logout()" title="Keluar"
+          class="p-2.5 rounded-xl text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-colors ml-1">
+          <i class="ph ph-sign-out text-lg"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- Content Area -->
+    <div id="content-area" class="flex-1 overflow-y-auto custom-scrollbar p-6 md:p-10 pb-24 md:pb-10 relative">
+      <!-- Dashboard View -->
+      <div id="view-dashboard" class="view-section active animate-fade-in space-y-8">
+        <!-- Overview Cards -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <!-- Total Balance -->
+          <div
+            class="glass-card p-6 rounded-3xl bg-gradient-to-br from-primary to-primary-hover text-white shadow-lg shadow-primary/30 relative overflow-hidden group hover-scale cursor-pointer"
+            onclick="toggleBalanceVisibility()">
+            <div
+              class="absolute right-0 top-0 opacity-10 transform translate-x-1/4 -translate-y-1/4 group-hover:scale-110 transition-transform duration-500">
+              <i class="ph-fill ph-wallet text-9xl"></i>
+            </div>
+            <div class="relative z-10">
+              <div class="flex items-center justify-between mb-1">
+                <p class="text-primary-50 text-sm font-medium opacity-90">Total Balance</p>
+                <button class="text-white hover:text-indigo-200 transition-colors">
+                  <i id="toggle-balance-icon" class="ph ph-eye text-xl"></i>
+                </button>
+              </div>
+              <h2 id="total-balance" class="text-4xl font-bold mb-4 tracking-tight" data-balance="0">Rp 0</h2>
+              <div
+                class="flex items-center justify-center gap-2 text-sm bg-white/20 w-8 h-8 rounded-full backdrop-blur-sm">
+                <i class="ph-fill ph-wallet text-lg"></i>
+              </div>
+            </div>
+          </div>
+
+          <!-- Pemasukan Card -->
+          <div
+            class="glass-card p-6 rounded-3xl bg-white dark:bg-dark-surface border border-light-border dark:border-dark-border shadow-sm group hover:shadow-md transition-shadow hover-scale cursor-pointer">
+            <div class="flex justify-between items-start mb-4">
+              <div>
+                <p class="text-slate-500 dark:text-slate-400 text-sm font-medium mb-1">Pemasukan</p>
+                <p class="flex items-center text-slate-500 dark:text-slate-400 text-sm font-medium mb-1">Bulan ini <span
+                    id="dashboard-income-pct"
+                    class="ml-2 text-xs font-bold text-emerald-500 bg-emerald-50 dark:bg-emerald-500/10 px-2 py-0.5 rounded-full">+0%</span>
+                </p>
+                <h2 id="dashboard-income" class="text-2xl font-bold text-slate-900 dark:text-white">Rp 0</h2>
+              </div>
+              <div
+                class="w-12 h-12 rounded-2xl bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center text-emerald-500 group-hover:scale-110 transition-transform duration-300">
+                <i class="ph ph-arrow-down-left text-2xl"></i>
+              </div>
+            </div>
+            <div class="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
+              <div class="bg-emerald-500 h-1.5 rounded-full" style="width: 70%"></div>
+            </div>
+          </div>
+
+          <!-- Pengeluaran Card -->
+          <div
+            class="glass-card p-6 rounded-3xl bg-white dark:bg-dark-surface border border-light-border dark:border-dark-border shadow-sm group hover:shadow-md transition-shadow hover-scale cursor-pointer">
+            <div class="flex justify-between items-start mb-4">
+              <div>
+                <p class="text-slate-500 dark:text-slate-400 text-sm font-medium mb-1">Pengeluaran</p>
+                <p class="flex items-center text-slate-500 dark:text-slate-400 text-sm font-medium mb-1">Bulan ini <span
+                    id="dashboard-expense-pct"
+                    class="ml-2 text-xs font-bold text-rose-500 bg-rose-50 dark:bg-rose-500/10 px-2 py-0.5 rounded-full">-0%</span>
+                </p>
+                <h2 id="dashboard-expense" class="text-2xl font-bold text-slate-900 dark:text-white">Rp 0</h2>
+              </div>
+              <div
+                class="w-12 h-12 rounded-2xl bg-rose-100 dark:bg-rose-500/20 flex items-center justify-center text-rose-500 group-hover:scale-110 transition-transform duration-300">
+                <i class="ph ph-arrow-up-right text-2xl"></i>
+              </div>
+            </div>
+            <div class="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
+              <div class="bg-rose-500 h-1.5 rounded-full" style="width: 45%"></div>
+            </div>
+          </div>
+
+          <!-- Total Jam Lembur Card -->
+          <div
+            class="glass-card p-6 rounded-3xl bg-gradient-to-br from-amber-500 to-green-600 text-white shadow-lg shadow-indigo-500/30 relative overflow-hidden group hover-scale cursor-pointer">
+            <div
+              class="absolute right-0 top-0 opacity-10 transform translate-x-1/4 -translate-y-1/4 group-hover:scale-110 transition-transform duration-500">
+              <i class="ph-fill ph-timer text-9xl"></i>
+            </div>
+            <div class="relative z-10 flex justify-between items-start">
+              <div>
+                <p class="text-indigo-100 text-sm font-medium mb-1">Total Jam Shift / Lembur</p>
+                <h2 id="dashboard-overtime-hours" class="text-3xl font-bold mb-2">0 Jam</h2>
+                <p id="dashboard-overtime-earnings" class="text-indigo-200 text-sm font-medium">Rp 0</p>
+              </div>
+              <div class="text-right">
+                <p class="text-indigo-200 text-xs mb-1">Total Shift</p>
+                <p id="dashboard-shift-count" class="text-2xl font-bold">0 shift</p>
+                <button onclick="document.querySelector('[data-view=shift]').click()"
+                  class="mt-3 text-xs bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-full transition-colors backdrop-blur-sm">
+                  Lihat
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Main Grid -->
+        <!-- Main Grid -->
+        <div class="grid grid-cols-1 gap-8 mb-8">
+
+          <!-- Top Row: Spending Flow Chart & Category Pie -->
+          <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+            <!-- Spending Flow Chart (2 columns) -->
+            <div
+              class="xl:col-span-2 bg-white dark:bg-dark-surface border border-light-border dark:border-dark-border rounded-3xl p-6 shadow-sm flex flex-col">
+              <div class="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+                <div>
+                  <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-3">Budget Spending Flow</h3>
+                  <div class="flex flex-wrap items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl w-fit">
+                    <button id="tab-flow-weekly"
+                      class="spending-flow-tab active px-3 py-1.5 text-xs font-semibold rounded-lg bg-white dark:bg-slate-700 shadow-sm text-slate-800 dark:text-white"
+                      data-period="weekly">Daily</button>
+                    <button id="tab-flow-monthly"
+                      class="spending-flow-tab px-3 py-1.5 text-xs font-semibold rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
+                      data-period="monthly">Weekly</button>
+                    <button id="tab-flow-yearly"
+                      class="spending-flow-tab px-3 py-1.5 text-xs font-semibold rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
+                      data-period="yearly">Monthly</button>
+                    <button id="tab-flow-custom"
+                      class="spending-flow-tab px-3 py-1.5 text-xs font-semibold rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
+                      data-period="custom">Custom</button>
+                  </div>
+                  <div id="spending-flow-custom-date" class="hidden mt-3 flex items-center gap-2">
+                    <input type="date" id="flow-start-date"
+                      class="text-xs bg-slate-50 dark:bg-slate-800 border border-light-border dark:border-dark-border rounded-lg px-2 py-1.5 focus:outline-none text-slate-600 dark:text-slate-300">
+                    <span class="text-xs text-slate-500">s/d</span>
+                    <input type="date" id="flow-end-date"
+                      class="text-xs bg-slate-50 dark:bg-slate-800 border border-light-border dark:border-dark-border rounded-lg px-2 py-1.5 focus:outline-none text-slate-600 dark:text-slate-300">
+                    <button id="flow-custom-apply"
+                      class="text-xs bg-primary text-white p-1.5 rounded-lg hover:bg-primary-hover transition-colors"><i
+                        class="ph ph-check text-base"></i></button>
+                  </div>
+                </div>
+                <div class="text-left md:text-right shrink-0">
+                  <p class="text-xs text-slate-500 dark:text-slate-400 mb-0.5">Total Pengeluaran</p>
+                  <p id="spending-flow-total" class="text-2xl font-bold text-rose-500">¥ 0</p>
+                </div>
+              </div>
+              <!-- Bar Chart Canvas -->
+              <div class="w-full flex-1 min-h-[280px] relative">
+                <canvas id="spending-flow-chart-canvas" class="w-full h-full absolute inset-0"></canvas>
+              </div>
+            </div>
+
+            <!-- Category Pie Chart -->
+            <div
+              class="xl:col-span-1 bg-white dark:bg-dark-surface border border-light-border dark:border-dark-border rounded-3xl p-6 shadow-sm flex flex-col">
+              <div class="flex flex-col mb-4 gap-3">
+                <h3 class="text-lg font-bold text-slate-900 dark:text-white">Pengeluaran Kategori</h3>
+                <div
+                  class="flex flex-wrap items-center justify-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl w-full">
+                  <button id="cat-tab-daily"
+                    class="cat-flow-tab px-2 py-1.5 text-xs font-semibold rounded-md text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors flex-1"
+                    data-period="daily">Daily</button>
+                  <button id="cat-tab-weekly"
+                    class="cat-flow-tab px-2 py-1.5 text-xs font-semibold rounded-md text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors flex-1"
+                    data-period="weekly">Weekly</button>
+                  <button id="cat-tab-monthly"
+                    class="cat-flow-tab active bg-white dark:bg-slate-700 shadow-sm text-slate-800 dark:text-white px-2 py-1.5 text-xs font-semibold rounded-md flex-1 transition-colors"
+                    data-period="monthly">Monthly</button>
+                  <button id="cat-tab-yearly"
+                    class="cat-flow-tab px-2 py-1.5 text-xs font-semibold rounded-md text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors flex-1"
+                    data-period="yearly">Yearly</button>
+                  <button id="cat-tab-custom"
+                    class="cat-flow-tab px-2 py-1.5 text-xs font-semibold rounded-md text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors flex-1"
+                    data-period="custom">Custom</button>
+                </div>
+                <!-- Custom Date Range Picker for Category -->
+                <div id="cat-custom-date" class="hidden mt-1 flex items-center justify-center gap-2">
+                  <input type="date" id="cat-start-date"
+                    class="text-xs bg-slate-50 dark:bg-slate-800 border border-light-border dark:border-dark-border rounded-lg px-2 py-1 focus:outline-none text-slate-600 dark:text-slate-300">
+                  <span class="text-xs text-slate-500">s/d</span>
+                  <input type="date" id="cat-end-date"
+                    class="text-xs bg-slate-50 dark:bg-slate-800 border border-light-border dark:border-dark-border rounded-lg px-2 py-1 focus:outline-none text-slate-600 dark:text-slate-300">
+                  <button id="cat-custom-apply"
+                    class="text-xs bg-primary text-white p-1 rounded-lg hover:bg-primary-hover transition-colors"><i
+                      class="ph ph-check text-base"></i></button>
+                </div>
+              </div>
+              <div class="flex justify-center w-full flex-1 min-h-[220px] relative">
+                <canvas id="category-pie-chart" class="w-full max-h-[200px] absolute inset-0"></canvas>
+              </div>
+              <!-- legends rendered via JS -->
+              <div id="category-legends" class="flex flex-wrap gap-2 justify-center mt-4"></div>
+            </div>
+          </div>
+
+          <!-- Middle Row: Recent Transactions, Financial Goals, Upcoming Bills -->
+          <div class="grid grid-cols-1 lg:grid-cols-7 gap-6">
+
+            <!-- Recent Transactions (Larger, No Scroll) -->
+            <div class="lg:col-span-3 flex flex-col">
+              <div class="flex items-center justify-between mb-6">
+                <h3 class="text-lg font-bold text-slate-900 dark:text-white">Transaksi Terakhir</h3>
+                <button onclick="document.querySelector('[data-view=pemasukan]').click()"
+                  class="text-primary text-sm font-medium hover:text-primary-hover transition-colors">Semua</button>
+              </div>
+              <div
+                class="bg-white dark:bg-dark-surface border border-light-border dark:border-dark-border rounded-3xl p-4 sm:p-6 shadow-sm flex-1">
+                <div id="recent-transactions-list" class="space-y-3"></div>
+              </div>
+            </div>
+
+            <!-- Financial Goals -->
+            <div class="lg:col-span-2 flex flex-col">
+              <div class="flex items-center justify-between mb-6">
+                <h3 class="text-lg font-bold text-slate-900 dark:text-white">Financial Goals</h3>
+                <button onclick="document.querySelector('[data-view=goals]').click()"
+                  class="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center hover:bg-primary hover:text-white transition-colors">
+                  <i class="ph ph-plus"></i>
+                </button>
+              </div>
+              <div class="flex-1 flex flex-col">
+                <div id="dashboard-goals-list" class="space-y-4"></div>
+              </div>
+            </div>
+
+            <!-- Upcoming Bills -->
+            <div class="lg:col-span-2 flex flex-col">
+              <div class="flex items-center justify-between mb-6">
+                <h3 class="text-lg font-bold text-slate-900 dark:text-white">Upcoming Bills</h3>
+                <button onclick="document.querySelector('[data-view=bills]').click()"
+                  class="text-primary text-sm font-medium hover:text-primary-hover transition-colors">Semua</button>
+              </div>
+              <div class="flex-1 flex flex-col">
+                <div id="dashboard-bills-list" class="space-y-3">
+                  <div
+                    class="p-4 text-center text-sm text-slate-500 border border-dashed border-light-border dark:border-dark-border rounded-2xl">
+                    Belum ada tagihan.
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- Other Views -->
+      <!-- Pemasukan View -->
+      <div id="view-pemasukan" class="view-section hidden animate-fade-in py-6">
+        <div class="flex items-center justify-between mb-8">
+          <div>
+            <h2 class="text-2xl font-bold text-slate-900 dark:text-white mb-2">Pemasukan</h2>
+            <p class="text-slate-500 dark:text-slate-400">Catat semua sumber pendapatan Anda.</p>
+          </div>
+          <button
+            class="bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2.5 rounded-xl font-medium transition-colors shadow-lg shadow-emerald-500/30 flex items-center justify-center gap-2 hover-scale">
+            <i class="ph ph-plus text-lg"></i>
+            <span class="hidden sm:inline">Tambah Pemasukan</span>
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <!-- Form -->
+          <div class="lg:col-span-1">
+            <div
+              class="bg-white dark:bg-dark-surface border border-light-border dark:border-dark-border rounded-3xl p-6 shadow-sm">
+              <h3 class="font-bold text-slate-900 dark:text-white mb-4">Input Pemasukan Baru</h3>
+              <form id="form-pemasukan" class="space-y-4">
+                <div>
+                  <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Judul
+                    Pemasukan</label>
+                  <input id="input-pemasukan-judul" type="text" placeholder="Contoh: Gaji Bulanan"
+                    class="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-light-border dark:border-dark-border focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-colors text-sm" />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Jumlah (¥)</label>
+                  <div class="relative">
+                    <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-medium">¥</span>
+                    <input id="input-pemasukan-jumlah" type="number" placeholder="0"
+                      class="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-light-border dark:border-dark-border focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-colors text-sm" />
+                  </div>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Tanggal</label>
+                  <input id="input-pemasukan-tanggal" type="date"
+                    class="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-light-border dark:border-dark-border focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-colors text-sm" />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Kategori</label>
+                  <select id="input-pemasukan-kategori"
+                    class="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-light-border dark:border-dark-border focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-colors appearance-none text-sm">
+                    <option>Gaji</option>
+                    <option>Freelance</option>
+                    <option>Bonus</option>
+                    <option>Investasi</option>
+                    <option>Lain-lain</option>
+                  </select>
+                </div>
+                <button type="submit"
+                  class="w-full bg-emerald-500 hover:bg-emerald-600 text-white py-3 rounded-xl font-medium transition-colors mt-2">Simpan
+                  Pemasukan</button>
+              </form>
+            </div>
+          </div>
+          <!-- History -->
+          <div class="lg:col-span-2 space-y-4">
+            <div
+              class="bg-white dark:bg-dark-surface border border-light-border dark:border-dark-border rounded-3xl p-6 shadow-sm">
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-4">
+                <h3 class="font-bold text-slate-900 dark:text-white">Riwayat Pemasukan</h3>
+                <!-- Filter/Sort/Search UI -->
+                <div class="flex flex-wrap items-center gap-2">
+                  <div class="relative">
+                    <i class="ph ph-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                    <input type="text" id="filter-pemasukan-search" placeholder="Cari transaksi..."
+                      class="pl-9 pr-3 py-1.5 text-sm rounded-lg border border-light-border dark:border-dark-border bg-slate-50 dark:bg-slate-800 focus:ring-2 focus:ring-emerald-500/50 focus:outline-none w-full sm:w-auto">
+                  </div>
+                  <select id="filter-pemasukan-sort"
+                    class="px-2 py-1.5 text-sm rounded-lg border border-light-border dark:border-dark-border bg-slate-50 dark:bg-slate-800 focus:outline-none">
+                    <option value="newest">Terbaru</option>
+                    <option value="oldest">Terlama</option>
+                    <option value="highest">Tertinggi</option>
+                    <option value="lowest">Terendah</option>
+                  </select>
+                </div>
+              </div>
+              <div class="overflow-x-auto custom-scrollbar pb-2">
+                <table class="w-full text-left border-collapse min-w-[550px]">
+                  <thead>
+                    <tr
+                      class="text-sm text-slate-500 dark:text-slate-400 border-b border-light-border dark:border-dark-border">
+                      <th class="pb-3 font-medium">Tanggal</th>
+                      <th class="pb-3 font-medium">Deskripsi</th>
+                      <th class="pb-3 font-medium">Kategori</th>
+                      <th class="pb-3 text-right font-medium">Jumlah</th>
+                      <th class="pb-3 text-right font-medium">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody id="pemasukan-history" class="text-sm"></tbody>
+                </table>
+              </div>
+              <div id="pemasukan-pagination" class="flex justify-between items-center mt-4 hidden">
+                <span id="pemasukan-page-info" class="text-xs font-medium text-slate-500 dark:text-slate-400">Hal 1 dari
+                  1</span>
+                <div class="flex gap-2">
+                  <button id="btn-pemasukan-prev"
+                    class="px-3 py-1 rounded-lg border border-light-border dark:border-dark-border text-sm font-medium text-slate-600 dark:text-slate-300 transition-colors">Prev</button>
+                  <button id="btn-pemasukan-next"
+                    class="px-3 py-1 rounded-lg border border-light-border dark:border-dark-border text-sm font-medium text-slate-600 dark:text-slate-300 transition-colors">Next</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pengeluaran View -->
+      <div id="view-pengeluaran" class="view-section hidden animate-fade-in py-6">
+        <div class="flex items-center justify-between mb-8">
+          <div>
+            <h2 class="text-2xl font-bold text-slate-900 dark:text-white mb-2">Pengeluaran</h2>
+            <p class="text-slate-500 dark:text-slate-400">Tracker detail pengeluaran harian.</p>
+          </div>
+          <button id="btn-toggle-pengeluaran-form"
+            class="bg-rose-500 hover:bg-rose-600 text-white px-5 py-2.5 rounded-xl font-medium transition-colors shadow-lg shadow-rose-500/30 flex items-center justify-center gap-2 hover-scale">
+            <i class="ph ph-plus text-lg"></i>
+            <span class="hidden sm:inline">Catat Pengeluaran</span>
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <!-- Form -->
+          <div class="lg:col-span-1">
+            <div
+              class="bg-white dark:bg-dark-surface border border-light-border dark:border-dark-border rounded-3xl p-6 shadow-sm">
+              <h3 class="font-bold text-slate-900 dark:text-white mb-4">Input Pengeluaran Baru</h3>
+              <form id="form-pengeluaran" class="space-y-4">
+                <div>
+                  <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Judul
+                    Pengeluaran</label>
+                  <input id="input-pengeluaran-judul" type="text" placeholder="Contoh: Makan Siang"
+                    class="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-light-border dark:border-dark-border focus:outline-none focus:ring-2 focus:ring-rose-500/50 transition-colors text-sm" />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Jumlah (¥)</label>
+                  <div class="relative">
+                    <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-medium">¥</span>
+                    <input id="input-pengeluaran-jumlah" type="number" placeholder="0"
+                      class="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-light-border dark:border-dark-border focus:outline-none focus:ring-2 focus:ring-rose-500/50 transition-colors text-sm" />
+                  </div>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Tanggal</label>
+                  <input id="input-pengeluaran-tanggal" type="date"
+                    class="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-light-border dark:border-dark-border focus:outline-none focus:ring-2 focus:ring-rose-500/50 transition-colors text-sm" />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Kategori</label>
+                  <select id="input-pengeluaran-kategori"
+                    class="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-light-border dark:border-dark-border focus:outline-none focus:ring-2 focus:ring-rose-500/50 transition-colors appearance-none text-sm">
+                    <option>Makanan &amp; Minuman</option>
+                    <option>Transportasi</option>
+                    <option>Belanja</option>
+                    <option>Hiburan</option>
+                    <option>Tagihan</option>
+                  </select>
+                </div>
+                <button type="submit"
+                  class="w-full bg-rose-500 hover:bg-rose-600 text-white py-3 rounded-xl font-medium transition-colors mt-2">Simpan
+                  Pengeluaran</button>
+              </form>
+
+            </div>
+          </div>
+          <!-- History -->
+          <div class="lg:col-span-2">
+            <div
+              class="bg-white dark:bg-dark-surface border border-light-border dark:border-dark-border rounded-3xl p-6 shadow-sm">
+              <div class="flex flex-col md:flex-row md:items-center justify-between mb-4 gap-4">
+                <h3 class="font-bold text-slate-900 dark:text-white">Riwayat Pengeluaran</h3>
+                <!-- Filter/Sort/Search UI -->
+                <div class="flex flex-wrap items-center gap-2 w-full md:w-auto justify-end">
+                  <div class="relative flex-1 md:flex-none">
+                    <i class="ph ph-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                    <input type="text" id="filter-pengeluaran-search" placeholder="Cari pengeluaran..."
+                      class="w-full pl-9 pr-3 py-1.5 text-sm rounded-lg border border-light-border dark:border-dark-border bg-slate-50 dark:bg-slate-800 focus:ring-2 focus:ring-rose-500/50 focus:outline-none">
+                  </div>
+                  <select id="filter-pengeluaran-cat"
+                    class="px-2 py-1.5 text-sm rounded-lg border border-light-border dark:border-dark-border bg-slate-50 dark:bg-slate-800 focus:outline-none">
+                    <option value="all">Semua Kategori</option>
+                  </select>
+                  <select id="filter-pengeluaran-sort"
+                    class="px-2 py-1.5 text-sm rounded-lg border border-light-border dark:border-dark-border bg-slate-50 dark:bg-slate-800 focus:outline-none">
+                    <option value="newest">Terbaru</option>
+                    <option value="oldest">Terlama</option>
+                    <option value="highest">Tertinggi</option>
+                    <option value="lowest">Terendah</option>
+                  </select>
+                </div>
+              </div>
+              <div class="overflow-x-auto custom-scrollbar pb-2">
+                <table class="w-full text-left border-collapse min-w-[550px]">
+                  <thead>
+                    <tr
+                      class="text-sm text-slate-500 dark:text-slate-400 border-b border-light-border dark:border-dark-border">
+                      <th class="pb-3 font-medium">Tanggal</th>
+                      <th class="pb-3 font-medium">Deskripsi</th>
+                      <th class="pb-3 font-medium">Kategori</th>
+                      <th class="pb-3 text-right font-medium">Jumlah</th>
+                      <th class="pb-3 text-right font-medium">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody id="pengeluaran-history" class="text-sm"></tbody>
+                </table>
+              </div>
+              <div id="pengeluaran-pagination" class="flex justify-between items-center mt-4 hidden">
+                <span id="pengeluaran-page-info" class="text-xs font-medium text-slate-500 dark:text-slate-400">Hal 1
+                  dari 1</span>
+                <div class="flex gap-2">
+                  <button id="btn-pengeluaran-prev"
+                    class="px-3 py-1 rounded-lg border border-light-border dark:border-dark-border text-sm font-medium text-slate-600 dark:text-slate-300 transition-colors">Prev</button>
+                  <button id="btn-pengeluaran-next"
+                    class="px-3 py-1 rounded-lg border border-light-border dark:border-dark-border text-sm font-medium text-slate-600 dark:text-slate-300 transition-colors">Next</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Goals View -->
+      <div id="view-goals" class="view-section hidden animate-fade-in py-6">
+        <div class="flex items-center justify-between mb-8">
+          <div>
+            <h2 class="text-2xl font-bold text-slate-900 dark:text-white mb-2">My Financial Goals</h2>
+            <p class="text-slate-500 dark:text-slate-400">Rencanakan masa depan keuangan Anda.</p>
+          </div>
+          <button id="btn-add-goal-top"
+            class="bg-primary hover:bg-primary-hover text-white px-5 py-2.5 rounded-xl font-medium transition-colors shadow-lg shadow-primary/30 flex items-center justify-center gap-2 hover-scale">
+            <i class="ph ph-plus text-lg"></i>
+            <span class="hidden sm:inline">Tambah Goal</span>
+          </button>
+        </div>
+
+        <!-- Goals Form (collapsible) -->
+        <div id="goal-form-section" class="hidden mb-8">
+          <div
+            class="bg-white dark:bg-dark-surface border border-light-border dark:border-dark-border rounded-3xl p-6 shadow-sm">
+            <h3 class="font-bold text-slate-900 dark:text-white mb-5">Buat Goal Baru</h3>
+            <form id="form-goal" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div class="sm:col-span-2">
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Nama Goal</label>
+                <input id="input-goal-name" type="text" placeholder="Contoh: Liburan Jepang"
+                  class="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-light-border dark:border-dark-border focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm" />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Target Jumlah
+                  (¥)</label>
+                <div class="relative">
+                  <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-medium text-sm">¥</span>
+                  <input id="input-goal-target" type="number" placeholder="0"
+                    class="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-light-border dark:border-dark-border focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm" />
+                </div>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Sudah Ditabung
+                  (¥)</label>
+                <div class="relative">
+                  <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-medium text-sm">¥</span>
+                  <input id="input-goal-saved" type="number" placeholder="0"
+                    class="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-light-border dark:border-dark-border focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm" />
+                </div>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Target Deadline</label>
+                <input id="input-goal-deadline" type="text" placeholder="Contoh: Des 2025"
+                  class="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-light-border dark:border-dark-border focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm" />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Warna</label>
+                <select id="input-goal-color"
+                  class="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-light-border dark:border-dark-border focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm">
+                  <option value="cyan">Cyan</option>
+                  <option value="purple">Ungu</option>
+                  <option value="emerald">Hijau</option>
+                  <option value="rose">Merah</option>
+                  <option value="amber">Amber</option>
+                  <option value="indigo">Indigo</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Ikon</label>
+                <select id="input-goal-icon"
+                  class="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-light-border dark:border-dark-border focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm">
+                  <option value="star">Bintang</option>
+                  <option value="airplane-tilt">Pesawat</option>
+                  <option value="laptop">Laptop</option>
+                  <option value="house">Rumah</option>
+                  <option value="car">Mobil</option>
+                  <option value="heart">Hati</option>
+                  <option value="trophy">Trofi</option>
+                </select>
+              </div>
+              <div class="sm:col-span-2 flex gap-3 pt-2">
+                <button type="submit"
+                  class="flex-1 bg-primary hover:bg-primary-hover text-white py-3 rounded-xl font-medium transition-colors">Simpan
+                  Goal</button>
+                <button type="button" id="btn-cancel-goal"
+                  class="px-6 py-3 rounded-xl border border-light-border dark:border-dark-border text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-medium transition-colors">Batal</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <!-- Goals Grid -->
+        <div id="goals-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+      </div>
+
+      <!-- Bills View -->
+      <div id="view-bills" class="view-section hidden animate-fade-in py-6">
+        <div class="flex items-center justify-between mb-8">
+          <div>
+            <h2 class="text-2xl font-bold text-slate-900 dark:text-white mb-2">Upcoming Bills</h2>
+            <p class="text-slate-500 dark:text-slate-400">Tagihan rutin bulanan Anda.</p>
+          </div>
+          <button id="btn-add-bill-top"
+            class="bg-amber-500 hover:bg-amber-600 text-white px-5 py-2.5 rounded-xl font-medium transition-colors shadow-lg shadow-amber-500/30 flex items-center justify-center gap-2 hover-scale">
+            <i class="ph ph-plus text-lg"></i>
+            <span class="hidden sm:inline">Tambah Tagihan</span>
+          </button>
+        </div>
+
+        <!-- Bills Form (collapsible) -->
+        <div id="bill-form-section" class="hidden mb-8">
+          <div
+            class="bg-white dark:bg-dark-surface border border-light-border dark:border-dark-border rounded-3xl p-6 shadow-sm">
+            <h3 class="font-bold text-slate-900 dark:text-white mb-5">Tambah Tagihan Baru</h3>
+            <form id="form-bill" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div class="sm:col-span-2">
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Nama Tagihan</label>
+                <input id="input-bill-name" type="text" placeholder="Contoh: Internet IndiHome"
+                  class="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-light-border dark:border-dark-border focus:outline-none focus:ring-2 focus:ring-amber-500/50 text-sm" />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Jumlah (¥)</label>
+                <div class="relative">
+                  <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-medium text-sm">¥</span>
+                  <input id="input-bill-amount" type="number" placeholder="0"
+                    class="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-light-border dark:border-dark-border focus:outline-none focus:ring-2 focus:ring-amber-500/50 text-sm" />
+                </div>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Jatuh Tempo</label>
+                <input id="input-bill-duedate" type="date"
+                  class="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-light-border dark:border-dark-border focus:outline-none focus:ring-2 focus:ring-amber-500/50 text-sm" />
+              </div>
+              <div class="sm:col-span-2">
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Kategori</label>
+                <select id="input-bill-category"
+                  class="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-light-border dark:border-dark-border focus:outline-none focus:ring-2 focus:ring-amber-500/50 text-sm">
+                  <option>Internet</option>
+                  <option>Listrik</option>
+                  <option>Air</option>
+                  <option>Rumah</option>
+                  <option>Kendaraan</option>
+                  <option>Langganan</option>
+                  <option>Lainnya</option>
+                </select>
+              </div>
+              <div class="sm:col-span-2 flex gap-3 pt-2">
+                <button type="submit"
+                  class="flex-1 bg-amber-500 hover:bg-amber-600 text-white py-3 rounded-xl font-medium transition-colors">Simpan
+                  Tagihan</button>
+                <button type="button" id="btn-cancel-bill"
+                  class="px-6 py-3 rounded-xl border border-light-border dark:border-dark-border text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-medium transition-colors">Batal</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <!-- Bills List -->
+        <div
+          class="bg-white dark:bg-dark-surface border border-light-border dark:border-dark-border rounded-3xl shadow-sm overflow-hidden">
+          <div
+            class="p-6 border-b border-light-border dark:border-dark-border flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/20">
+            <h3 id="bills-month-label" class="font-bold text-slate-900 dark:text-white">Bulan Ini</h3>
+            <span id="bills-total-label" class="text-sm font-medium text-slate-500"></span>
+          </div>
+          <div id="bills-list" class="divide-y divide-light-border dark:divide-dark-border"></div>
+        </div>
+      </div>
+
+
+      <!-- Shift Kerja View -->
+      <div id="view-shift" class="view-section hidden animate-fade-in py-6">
+        <div class="flex items-center justify-between mb-8">
+          <div>
+            <h2 class="text-2xl font-bold text-slate-900 dark:text-white mb-2">Jadwal Shift Kerja</h2>
+            <p class="text-slate-500 dark:text-slate-400">Pantau shift dan estimasi pendapatan Anda.</p>
+          </div>
+          <button id="btn-add-shift-top"
+            class="bg-indigo-500 hover:bg-indigo-600 text-white px-5 py-2.5 rounded-xl font-medium transition-colors shadow-lg shadow-indigo-500/30 flex items-center justify-center gap-2 hover-scale">
+            <i class="ph ph-plus text-lg"></i>
+            <span class="hidden sm:inline">Tambah Shift</span>
+          </button>
+        </div>
+
+        <!-- Shift Form (collapsible) -->
+        <div id="shift-form-section" class="hidden mb-8">
+          <div
+            class="bg-white dark:bg-dark-surface border border-light-border dark:border-dark-border rounded-3xl p-6 shadow-sm">
+            <h3 class="font-bold text-slate-900 dark:text-white mb-5">Tambah Shift Baru</h3>
+            <form id="form-shift" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Tanggal</label>
+                <input id="input-shift-date" type="date"
+                  class="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-light-border dark:border-dark-border focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-sm" />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Tipe Shift</label>
+                <select id="input-shift-type"
+                  class="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-light-border dark:border-dark-border focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-sm">
+                  <option value="Morning">🌅 Morning (08:00 - 16:00)</option>
+                  <option value="Afternoon">🌤 Afternoon (13:00 - 21:00)</option>
+                  <option value="Night">🌙 Night (20:00 - 04:00)</option>
+                  <option value="Full">☀️ Full Day (08:00 - 20:00)</option>
+                  <option value="Lembur">⚡ Lembur (Pure Overtime)</option>
+                  <option value="OffDay">🏖 Off Day</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Jam Mulai</label>
+                <input id="input-shift-start" type="time" value="08:00"
+                  class="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-light-border dark:border-dark-border focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-sm" />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Jam Selesai</label>
+                <input id="input-shift-end" type="time" value="16:00"
+                  class="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-light-border dark:border-dark-border focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-sm" />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Jam Normal
+                  (/hari)</label>
+                <input id="input-shift-normal-hours" type="number" placeholder="8" value="8" min="0" max="24"
+                  class="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-light-border dark:border-dark-border focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-sm" />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Tarif Normal
+                  (¥/Jam)</label>
+                <div class="relative">
+                  <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-medium text-sm">¥</span>
+                  <input id="input-shift-rate" type="number" placeholder="1000"
+                    class="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-light-border dark:border-dark-border focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-sm" />
+                </div>
+              </div>
+              <div class="sm:col-span-2">
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Tarif Lembur (¥/Jam) —
+                  1.5x jika kosong</label>
+                <div class="relative">
+                  <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-medium text-sm">¥</span>
+                  <input id="input-shift-ot-rate" type="number" placeholder="Kosongkan = auto 1.5x tarif normal"
+                    class="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-light-border dark:border-dark-border focus:outline-none focus:ring-2 focus:ring-purple-500/50 text-sm" />
+                </div>
+              </div>
+              <div class="sm:col-span-2 flex gap-3 pt-2">
+                <button type="submit"
+                  class="flex-1 bg-indigo-500 hover:bg-indigo-600 text-white py-3 rounded-xl font-medium transition-colors">Simpan
+                  Shift</button>
+                <button type="button" id="btn-cancel-shift"
+                  class="px-6 py-3 rounded-xl border border-light-border dark:border-dark-border text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-medium transition-colors">Batal</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div class="lg:col-span-2 space-y-6">
+            <!-- Overtime Line Chart -->
+            <div
+              class="bg-white dark:bg-dark-surface border border-light-border dark:border-dark-border rounded-3xl p-6 shadow-sm">
+              <div class="flex items-center justify-between mb-4">
+                <h3 class="font-bold text-slate-900 dark:text-white">Jam Lembur vs Jam Normal <span
+                    id="shift-line-chart-month-label"></span></h3>
+                <div class="flex items-center">
+                  <input type="month" id="shift-line-chart-picker"
+                    class="min-date-input text-xs bg-slate-50 dark:bg-slate-800 border border-light-border dark:border-dark-border rounded-lg px-2 py-1.5 focus:outline-none text-slate-600 dark:text-slate-300">
+                </div>
+              </div>
+              <div class="w-full min-h-[200px] relative">
+                <canvas id="shift-line-chart" class="w-full max-h-[200px] absolute inset-0"></canvas>
+              </div>
+            </div>
+
+            <!-- Calendar & Riwayat Shift -->
+            <div
+              class="bg-white dark:bg-dark-surface border border-light-border dark:border-dark-border rounded-3xl p-6 shadow-sm">
+              <div class="flex items-center justify-between mb-4">
+                <h3 class="font-bold text-slate-900 dark:text-white">Shift Calendar <span
+                    id="shift-calendar-month-label"></span></h3>
+                <div class="flex items-center">
+                  <input type="month" id="shift-calendar-picker"
+                    class="text-xs bg-slate-50 dark:bg-slate-800 border border-light-border dark:border-dark-border rounded-lg px-2 py-1.5 focus:outline-none text-slate-600 dark:text-slate-300">
+                </div>
+              </div>
+              <div class="grid grid-cols-7 gap-1 text-center text-xs font-medium text-slate-500 mb-2">
+                <div>Min</div>
+                <div>Sen</div>
+                <div>Sel</div>
+                <div>Rab</div>
+                <div>Kam</div>
+                <div>Jum</div>
+                <div>Sab</div>
+              </div>
+              <div id="shift-calendar-grid" class="grid grid-cols-7 gap-1 text-center w-full mb-6"></div>
+
+              <div
+                class="flex items-center justify-between mb-4 mt-8 pt-6 border-t border-light-border dark:border-dark-border">
+                <h3 class="font-bold text-slate-900 dark:text-white">Riwayat Shift</h3>
+              </div>
+              <div id="shifts-list" class="space-y-4"></div>
+
+              <!-- Pagination -->
+              <div id="shift-pagination"
+                class="flex justify-between items-center mt-6 pt-4 border-t border-light-border dark:border-dark-border hidden">
+                <button id="btn-shift-prev"
+                  class="px-3 py-1.5 rounded-lg border border-light-border dark:border-dark-border text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-sm">Prev</button>
+                <span id="shift-page-info" class="text-sm text-slate-500">Hal 1 dari 1</span>
+                <button id="btn-shift-next"
+                  class="px-3 py-1.5 rounded-lg border border-light-border dark:border-dark-border text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-sm">Next</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="lg:col-span-1 space-y-4">
+            <!-- Summary -->
+            <div
+              class="bg-gradient-to-br from-indigo-500 to-purple-600 p-6 rounded-3xl text-white shadow-lg shadow-indigo-500/30 relative overflow-hidden">
+              <i class="ph-fill ph-coins absolute -right-4 -top-4 text-8xl opacity-10"></i>
+              <h3 class="font-medium text-indigo-100 mb-1">Estimasi Pendapatan Shift</h3>
+              <h2 id="shift-total-earnings" class="text-3xl font-bold mb-5">Rp 0</h2>
+              <div class="space-y-2.5">
+                <div class="flex justify-between items-center text-sm border-b border-white/20 pb-2">
+                  <span class="text-indigo-200">Jam Normal</span>
+                  <span id="shift-normal-hours" class="font-bold">0 Jam</span>
+                </div>
+                <div class="flex justify-between items-center text-sm border-b border-white/20 pb-2">
+                  <span class="text-purple-200">Jam Lembur ⚡</span>
+                  <span id="shift-overtime-hours" class="font-bold text-yellow-300">0 Jam</span>
+                </div>
+                <div class="flex justify-between items-center text-sm border-b border-white/20 pb-2">
+                  <span class="text-purple-200">Total Upah Lembur</span>
+                  <span id="shift-total-ot-pay" class="font-bold text-yellow-300">Rp 0</span>
+                </div>
+                <div class="flex justify-between items-center text-sm border-b border-white/20 pb-2">
+                  <span class="text-indigo-200">Total Jam Kerja</span>
+                  <span id="shift-total-hours" class="font-bold">0 Jam</span>
+                </div>
+                <div class="flex justify-between items-center text-sm">
+                  <span class="text-indigo-200">Rata-rata/Shift</span>
+                  <span id="shift-avg-per-shift" class="font-bold">Rp 0</span>
+                </div>
+              </div>
+            </div>
+            <!-- Catat ke Pemasukan -->
+            <button id="btn-record-shift-income"
+              class="w-full bg-white dark:bg-dark-surface border border-light-border dark:border-dark-border text-slate-700 dark:text-slate-300 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 hover:text-emerald-600 hover:border-emerald-400 font-medium py-3 px-4 rounded-2xl transition-colors flex items-center justify-center gap-2">
+              <i class="ph ph-arrow-down-left text-lg text-emerald-500"></i>
+              Catat Sebagai Pemasukan
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== TASK / PROJECT VIEW ===== -->
+      <div id="view-task" class="view-section hidden animate-fade-in py-6">
+        <div class="max-w-6xl mx-auto px-6 md:px-10 pb-20 space-y-8">
+          <div class="flex items-center justify-between mb-8">
+            <div>
+              <h2 class="text-2xl font-bold text-slate-900 dark:text-white mb-2">Task & Project</h2>
+              <p class="text-slate-500 dark:text-slate-400">Kelola proyek dan tingkatkan produktivitas Anda.</p>
+            </div>
+            <button id="btn-add-task-top"
+              class="bg-sky-500 hover:bg-sky-600 text-white px-5 py-2.5 rounded-xl font-medium transition-colors shadow-lg shadow-sky-500/30 flex items-center justify-center gap-2 hover-scale">
+              <i class="ph ph-plus text-lg"></i>
+              <span class="hidden sm:inline">Tambah Task</span>
+            </button>
+          </div>
+
+          <!-- Task Stats Cards -->
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div
+              class="bg-gradient-to-br from-rose-500 to-red-600 border border-rose-400 p-5 rounded-3xl shadow-sm text-center text-white relative overflow-hidden">
+              <i class="ph-fill ph-kanban absolute -right-3 -top-3 text-6xl opacity-20"></i>
+              <div class="relative z-10 flex flex-col items-center">
+                <p class="text-rose-100 text-sm font-medium mb-1">Total Project</p>
+                <h3 id="task-stat-total" class="text-3xl font-bold">12</h3>
+              </div>
+            </div>
+            <div
+              class="bg-white dark:bg-dark-surface border border-light-border dark:border-dark-border p-5 rounded-3xl shadow-sm text-center relative overflow-hidden">
+              <i
+                class="ph-fill ph-check-circle absolute -right-3 -top-3 text-6xl text-emerald-500 opacity-5 dark:opacity-10"></i>
+              <div class="relative z-10 flex flex-col items-center">
+                <p class="text-slate-500 dark:text-slate-400 text-sm font-medium mb-1">Completed</p>
+                <h3 id="task-stat-completed" class="text-3xl font-bold text-emerald-500">5</h3>
+              </div>
+            </div>
+            <div
+              class="bg-white dark:bg-dark-surface border border-light-border dark:border-dark-border p-5 rounded-3xl shadow-sm text-center relative overflow-hidden">
+              <i
+                class="ph-fill ph-spinner-gap absolute -right-3 -top-3 text-6xl text-sky-500 opacity-5 dark:opacity-10"></i>
+              <div class="relative z-10 flex flex-col items-center">
+                <p class="text-slate-500 dark:text-slate-400 text-sm font-medium mb-1">In Progress</p>
+                <h3 id="task-stat-progress" class="text-3xl font-bold text-sky-500">4</h3>
+              </div>
+            </div>
+            <div
+              class="bg-white dark:bg-dark-surface border border-light-border dark:border-dark-border p-5 rounded-3xl shadow-sm text-center relative overflow-hidden">
+              <i
+                class="ph-fill ph-clock absolute -right-3 -top-3 text-6xl text-amber-500 opacity-5 dark:opacity-10"></i>
+              <div class="relative z-10 flex flex-col items-center">
+                <p class="text-slate-500 dark:text-slate-400 text-sm font-medium mb-1">Pending</p>
+                <h3 id="task-stat-pending" class="text-3xl font-bold text-amber-500">3</h3>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Main Content: Project Progress Chart & Tasks -->
+            <div class="lg:col-span-2 space-y-6">
+              <!-- Project Progress Chart -->
+              <div
+                class="bg-white dark:bg-dark-surface border border-light-border dark:border-dark-border rounded-3xl p-6 shadow-sm">
+                <h3 class="font-bold text-slate-900 dark:text-white mb-4">Project Progress Overview</h3>
+                <div class="w-full min-h-[200px] relative">
+                  <canvas id="task-progress-chart" class="w-full max-h-[200px] absolute inset-0"></canvas>
+                </div>
+              </div>
+
+              <!-- Task Form -->
+              <div id="task-form-section" class="hidden mb-6">
+                <div
+                  class="bg-white dark:bg-dark-surface border border-light-border dark:border-dark-border rounded-3xl p-6 shadow-sm">
+                  <h3 class="font-bold text-slate-900 dark:text-white mb-5">Tambah Task Baru</h3>
+                  <form id="form-task" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div class="sm:col-span-2">
+                      <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Nama Task</label>
+                      <input id="input-task-title" type="text" placeholder="Contoh: Menyelesaikan desain UI" required
+                        class="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-light-border dark:border-dark-border focus:outline-none focus:ring-2 focus:ring-sky-500/50 text-sm" />
+                    </div>
+                    <div>
+                      <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Status</label>
+                      <select id="input-task-status"
+                        class="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-light-border dark:border-dark-border focus:outline-none focus:ring-2 focus:ring-sky-500/50 text-sm">
+                        <option value="pending">Pending</option>
+                        <option value="progress">In Progress</option>
+                        <option value="completed">Completed</option>
+                      </select>
+                    </div>
+                    <div class="flex items-end gap-3 pt-2">
+                      <button type="submit"
+                        class="flex-1 bg-sky-500 hover:bg-sky-600 text-white py-2.5 rounded-xl font-medium transition-colors">Simpan</button>
+                      <button type="button" id="btn-cancel-task"
+                        class="px-5 py-2.5 rounded-xl border border-light-border dark:border-dark-border text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-medium transition-colors">Batal</button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+
+              <!-- Task List -->
+              <div
+                class="bg-white dark:bg-dark-surface border border-light-border dark:border-dark-border rounded-3xl p-6 shadow-sm">
+                <h3 class="font-bold text-slate-900 dark:text-white mb-4 flex items-center justify-between">
+                  <span>Daftar Task</span>
+                </h3>
+                <div id="task-list" class="space-y-3">
+                  <div
+                    class="p-4 flex items-center justify-center border border-dashed border-light-border dark:border-dark-border rounded-2xl">
+                    <span class="text-slate-500 text-sm">Belum ada task berjalan.</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right Sidebar: Pomodoro -->
+            <div class="lg:col-span-1 space-y-6">
+              <div
+                class="bg-gradient-to-br from-rose-500 to-red-600 rounded-3xl p-6 shadow-lg shadow-rose-500/30 text-white relative overflow-hidden">
+                <i class="ph-fill ph-timer absolute -right-4 -top-4 text-8xl opacity-10"></i>
+                <div class="flex justify-between items-center mb-6 relative z-10">
+                  <h3 class="font-bold text-lg">Pomodoro</h3>
+                  <i class="ph ph-coffee text-xl"></i>
+                </div>
+                <div class="text-center mb-6 relative z-10">
+                  <h1 id="pomodoro-time" class="text-6xl font-bold tracking-tight mb-2">25:00</h1>
+                  <p id="pomodoro-status" class="text-rose-100 text-sm uppercase tracking-widest font-medium">Work Time
+                  </p>
+                </div>
+                <div class="grid grid-cols-3 gap-2 mb-6 relative z-10">
+                  <button onclick="setPomodoroMode('work')" id="pomo-btn-work"
+                    class="bg-white/20 hover:bg-white/30 text-xs font-semibold py-2 rounded-xl transition-colors backdrop-blur-sm ring-2 ring-white/50">Pomodoro</button>
+                  <button onclick="setPomodoroMode('shortBreak')" id="pomo-btn-short"
+                    class="bg-white/10 hover:bg-white/30 text-xs font-semibold py-2 rounded-xl transition-colors backdrop-blur-sm">Short
+                    Break</button>
+                  <button onclick="setPomodoroMode('longBreak')" id="pomo-btn-long"
+                    class="bg-white/10 hover:bg-white/30 text-xs font-semibold py-2 rounded-xl transition-colors backdrop-blur-sm">Long
+                    Break</button>
+                </div>
+                <div class="flex gap-3 relative z-10">
+                  <button id="pomodoro-toggle" onclick="togglePomodoro()"
+                    class="flex-1 bg-white text-rose-600 font-bold py-3 rounded-2xl shadow-sm hover:shadow transition-all">START</button>
+                  <button id="pomodoro-reset" onclick="resetPomodoro()"
+                    class="w-12 h-12 flex items-center justify-center bg-white/20 text-white rounded-2xl hover:bg-white/30 transition-colors"><i
+                      class="ph ph-arrow-circle-left text-xl"></i></button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== SETTINGS VIEW ===== -->
+      <div id="view-settings" class="view-section hidden animate-fade-in py-6 h-full overflow-y-auto">
+        <div class="max-w-3xl mx-auto space-y-6 pb-20">
+
+          <!-- Profile Settings -->
+          <div
+            class="bg-white dark:bg-dark-surface border border-light-border dark:border-dark-border rounded-3xl p-6 shadow-sm">
+            <h3 class="font-bold text-slate-900 dark:text-white mb-5 flex items-center gap-2"><i
+                class="ph ph-user-circle text-xl text-primary"></i> Profil Saya</h3>
+            <div
+              class="flex flex-col sm:flex-row items-start sm:items-center gap-5 mb-6 pb-6 border-b border-light-border dark:border-dark-border">
+              <div class="relative w-24 h-24 mb-4 sm:mb-0">
+                <img id="settings-avatar" src="https://ui-avatars.com/api/?name=U&background=6366f1&color=fff"
+                  class="w-24 h-24 rounded-2xl border-2 border-primary/30 object-cover" alt="Avatar" />
+                <label for="settings-new-photo"
+                  class="absolute -bottom-2 -right-2 w-8 h-8 bg-primary text-white rounded-full flex items-center justify-center cursor-pointer hover:scale-110 transition-transform shadow-sm">
+                  <i class="ph ph-camera text-sm"></i>
+                </label>
+                <input type="file" id="settings-new-photo" accept="image/*" class="hidden" />
+              </div>
+              <div>
+                <p id="settings-name" class="text-xl font-bold text-slate-900 dark:text-white">User</p>
+                <p id="settings-email" class="text-sm text-slate-500 mt-1">email@email.com</p>
+                <p class="text-xs text-slate-400 mt-2">Avatar dibuat otomatis dari nama Anda</p>
+              </div>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Nama Baru</label>
+                <input id="settings-new-name" type="text" placeholder="Nama lengkap..."
+                  class="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-light-border dark:border-dark-border focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm" />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Password Baru</label>
+                <input id="settings-new-password" type="password" placeholder="Min. 6 karakter..."
+                  class="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-light-border dark:border-dark-border focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm" />
+              </div>
+            </div>
+            <button onclick="saveProfileSettings()"
+              class="mt-4 bg-primary hover:bg-primary-hover text-white px-6 py-2.5 rounded-xl font-medium transition-colors shadow-lg shadow-primary/20">Simpan
+              Perubahan</button>
+          </div>
+
+          <!-- App Preferences -->
+          <div
+            class="bg-white dark:bg-dark-surface border border-light-border dark:border-dark-border rounded-3xl p-6 shadow-sm">
+            <h3 class="font-bold text-slate-900 dark:text-white mb-5 flex items-center gap-2"><i
+                class="ph ph-sliders text-xl text-indigo-500"></i> Preferensi Aplikasi</h3>
+            <div class="space-y-4">
+              <div class="flex items-center justify-between py-3 border-b border-light-border dark:border-dark-border">
+                <div>
+                  <p class="font-medium text-slate-900 dark:text-white text-sm">Mode Gelap</p>
+                  <p class="text-xs text-slate-500">Tampilan tema gelap</p>
+                </div>
+                <button id="settings-theme-toggle" onclick="toggleTheme()"
+                  class="w-12 h-6 bg-slate-200 dark:bg-primary rounded-full relative transition-colors duration-300 flex-shrink-0">
+                  <span
+                    class="w-4 h-4 bg-white rounded-full absolute top-1 left-1 dark:translate-x-6 transition-transform duration-300 block"></span>
+                </button>
+              </div>
+              <div class="flex items-center justify-between py-3 border-b border-light-border dark:border-dark-border">
+                <div>
+                  <p class="font-medium text-slate-900 dark:text-white text-sm">Mata Uang</p>
+                  <p class="text-xs text-slate-500">Format penampilan nilai uang di seluruh aplikasi</p>
+                </div>
+                <select id="settings-currency-select" onchange="onCurrencyChange(this.value)"
+                  class="px-3 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800 border border-light-border dark:border-dark-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50">
+                  <option value="IDR">🇮🇩 Rupiah (Rp)</option>
+                  <option value="JPY">🇯🇵 Yen Jepang (¥)</option>
+                  <option value="USD">🇺🇸 Dollar AS ($)</option>
+                  <option value="EUR">🇪🇺 Euro (€)</option>
+                  <option value="SGD">🇸🇬 Dollar Singapura (S$)</option>
+                  <option value="MYR">🇲🇾 Ringgit Malaysia (RM)</option>
+                  <option value="CUSTOM">✏️ Custom...</option>
+                </select>
+              </div>
+              <!-- Custom currency row (hidden by default) -->
+              <div id="settings-custom-currency-row"
+                class="hidden py-3 border-b border-light-border dark:border-dark-border">
+                <p class="font-medium text-slate-900 dark:text-white text-sm mb-2">Simbol Mata Uang Custom</p>
+                <div class="flex gap-2">
+                  <input id="settings-custom-symbol" type="text" placeholder="Contoh: Rp, $, ¥, ₩, ฿" maxlength="5"
+                    class="flex-1 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-light-border dark:border-dark-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" />
+                  <button onclick="applyCustomCurrency()"
+                    class="px-4 py-2 rounded-xl bg-primary hover:bg-primary-hover text-white text-sm font-medium transition-colors">Terapkan</button>
+                </div>
+              </div>
+              <div class="flex items-center justify-between py-3">
+                <div>
+                  <p class="font-medium text-slate-900 dark:text-white text-sm">Bahasa</p>
+                  <p class="text-xs text-slate-500">Bahasa tampilan aplikasi</p>
+                </div>
+                <select
+                  class="px-3 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800 border border-light-border dark:border-dark-border text-sm focus:outline-none">
+                  <option selected>Bahasa Indonesia</option>
+                  <option>English</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Data Management & Features -->
+          <div
+            class="bg-white dark:bg-dark-surface border border-light-border dark:border-dark-border rounded-3xl p-6 shadow-sm">
+            <h3 class="font-bold text-slate-900 dark:text-white mb-5 flex items-center gap-2"><i
+                class="ph ph-database text-xl text-emerald-500"></i> Manajemen Data & Fitur</h3>
+            <div class="space-y-3">
+              <div class="flex items-center justify-between p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 gap-4">
+                <div class="flex-1">
+                  <p class="font-medium text-slate-900 dark:text-white text-sm">Tagihan Rutin</p>
+                  <p class="text-xs text-slate-500">Otomatis catat transaksi tiap bulan</p>
+                </div>
+                <button onclick="document.querySelector('[data-view=bills]').click()"
+                  class="flex items-center justify-center gap-2 w-28 py-2 rounded-xl bg-primary hover:bg-primary-hover text-white text-sm font-medium transition-colors shrink-0"><i
+                    class="ph ph-calendar-plus"></i> Atur</button>
+              </div>
+              <div class="flex items-center justify-between p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 gap-4">
+                <div class="flex-1">
+                  <p class="font-medium text-slate-900 dark:text-white text-sm">Export Semua Data</p>
+                  <p class="text-xs text-slate-500">Unduh semua data sebagai Excel</p>
+                </div>
+                <button onclick="exportExcel()"
+                  class="flex items-center justify-center gap-2 w-28 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-medium transition-colors shrink-0"><i
+                    class="ph ph-file-xls"></i> Export</button>
+              </div>
+              <div class="flex items-center justify-between p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 gap-4">
+                <div class="flex-1">
+                  <p class="font-medium text-slate-900 dark:text-white text-sm">Reset Data Saya</p>
+                  <p class="text-xs text-slate-500">Hapus semua transaksi, goals, bills, shifts</p>
+                </div>
+                <button onclick="resetUserData()"
+                  class="flex items-center justify-center gap-2 w-28 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium transition-colors shrink-0"><i
+                    class="ph ph-trash"></i> Reset</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Danger Zone -->
+          <div
+            class="bg-white dark:bg-dark-surface border-2 border-rose-200 dark:border-rose-500/30 rounded-3xl p-6 shadow-sm">
+            <h3 class="font-bold text-rose-600 mb-5 flex items-center gap-2"><i class="ph ph-warning text-xl"></i> Zona
+              Berbahaya</h3>
+            <div class="flex items-center justify-between p-4 rounded-2xl bg-rose-50 dark:bg-rose-500/10">
+              <div>
+                <p class="font-medium text-slate-900 dark:text-white text-sm">Hapus Akun</p>
+                <p class="text-xs text-slate-500">Akun dan semua data akan dihapus permanen</p>
+              </div>
+              <button onclick="deleteAccount()"
+                class="flex items-center gap-2 px-4 py-2 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-sm font-medium transition-colors"><i
+                  class="ph ph-user-minus"></i> Hapus</button>
+            </div>
+          </div>
+
+          <!-- App Info -->
+          <div class="text-center py-4">
+            <p class="text-xs text-slate-400">KaneBuddy v2.0 &bull; Dibuat dengan ❤️ &bull; Data disimpan di browser
+              Anda
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recurring Transactions Modal -->
+      <div id="modal-recurring" class="fixed inset-0 z-50 flex items-center justify-center hidden">
+        <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="closeRecurringModal()"></div>
+        <div
+          class="bg-white dark:bg-dark-surface rounded-3xl shadow-2xl w-full max-w-sm relative z-10 p-6 transform transition-all scale-95 opacity-0 animate-modal-in">
+          <div class="flex items-center justify-between mb-6">
+            <h3 class="text-xl font-bold text-slate-900 dark:text-white">Tagihan Rutin</h3>
+            <button onclick="closeRecurringModal()"
+              class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-white flex items-center justify-center transition-colors"><i
+                class="ph ph-x text-lg"></i></button>
+          </div>
+          <form id="form-recurring" class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Nama
+                Tagihan/Langganan</label>
+              <input id="input-req-name" type="text" placeholder="Contoh: Netflix"
+                class="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-light-border dark:border-dark-border focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Nominal (¥)</label>
+              <div class="relative">
+                <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-medium text-sm">¥</span>
+                <input id="input-req-amount" type="number" placeholder="0"
+                  class="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-light-border dark:border-dark-border focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm">
+              </div>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Tipe</label>
+              <select id="input-req-type"
+                class="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-light-border dark:border-dark-border focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm appearance-none">
+                <option value="expense">Pengeluaran</option>
+                <option value="income">Pemasukan</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Kategori</label>
+              <!-- Will be populated by JS based on type -->
+              <select id="input-req-category"
+                class="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-light-border dark:border-dark-border focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm appearance-none">
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Tanggal Jatuh Tempo
+                (1-31)</label>
+              <input id="input-req-date" type="number" min="1" max="31" placeholder="Misal: 25"
+                class="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-light-border dark:border-dark-border focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm">
+            </div>
+            <button type="submit"
+              class="w-full bg-primary hover:bg-primary-hover text-white py-3 rounded-xl font-medium transition-colors mt-2 text-sm shadow-lg shadow-primary/30">Simpan
+              Tagihan Rutin</button>
+          </form>
+
+          <div class="mt-6 pt-4 border-t border-light-border dark:border-dark-border">
+            <div class="flex items-center justify-between mb-3">
+              <h4 class="font-bold text-sm text-slate-900 dark:text-white">Daftar Tagihan Rutin</h4>
+            </div>
+            <div id="recurring-list" class="space-y-2 max-h-[150px] overflow-y-auto custom-scrollbar pr-2"></div>
+          </div>
+        </div>
+        <!-- Custom Categories Modal -->
+        <div id="modal-categories" class="fixed inset-0 z-50 flex items-center justify-center hidden">
+          <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="closeCategoryModal()"></div>
+          <div
+            class="bg-white dark:bg-dark-surface rounded-3xl shadow-2xl w-full max-w-sm relative z-10 p-6 transform transition-all scale-95 opacity-0 animate-modal-in flex flex-col max-h-[90vh]">
+            <div class="flex items-center justify-between mb-6 shrink-0">
+              <h3 class="text-xl font-bold text-slate-900 dark:text-white">Kategori Kustom</h3>
+              <button onclick="closeCategoryModal()"
+                class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-white flex items-center justify-center transition-colors"><i
+                  class="ph ph-x text-lg"></i></button>
+            </div>
+
+            <div class="flex items-stretch gap-2 mb-4 shrink-0">
+              <input type="text" id="input-new-category-name" placeholder="Nama kategori"
+                class="flex-1 px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-light-border dark:border-dark-border focus:outline-none focus:ring-2 focus:ring-rose-500/50 text-sm">
+
+              <div
+                class="relative w-[42px] h-[42px] rounded-lg overflow-hidden shrink-0 shadow-sm border border-light-border dark:border-dark-border group cursor-pointer"
+                title="Pilih Warna">
+                <input type="color" id="input-new-category-color" value="#f43f5e"
+                  class="absolute -top-2 -left-2 w-[58px] h-[58px] cursor-pointer">
+                <div
+                  class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none bg-black/10">
+                  <i class="ph ph-palette text-white drop-shadow-md"></i>
+                </div>
+              </div>
+
+              <button type="button" id="btn-add-category"
+                class="w-[42px] h-[42px] shrink-0 bg-slate-900 dark:bg-slate-700 text-white rounded-lg hover:bg-slate-800 dark:hover:bg-slate-600 transition-colors flex items-center justify-center">
+                <i class="ph ph-plus text-lg"></i>
+              </button>
+            </div>
+
+            <div
+              class="mt-2 pt-4 border-t border-light-border dark:border-dark-border flex-1 flex flex-col overflow-hidden">
+              <h4 class="font-bold text-sm text-slate-900 dark:text-white mb-3 shrink-0">Kategori Tersimpan</h4>
+              <div id="custom-categories-list"
+                class="space-y-2 overflow-y-auto custom-scrollbar pr-1 flex-1 min-h-[150px]"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Toast Notification Container -->
+      <div id="toast-container" class="fixed top-6 right-6 z-[100] flex flex-col items-end gap-3 pointer-events-none">
+      </div>
+      <!-- Floating Action Button (Mobile) -->
+      <button id="fab-add"
+        class="md:hidden absolute bottom-6 right-6 w-14 h-14 bg-primary text-white rounded-full shadow-lg shadow-primary/40 flex items-center justify-center hover:scale-110 transition-transform z-30">
+        <i class="ph ph-plus text-2xl"></i>
+      </button>
+  </main>
+
+  <!-- Overlay for mobile menu -->
+  <div id="mobile-overlay"
+    class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-40 hidden opacity-0 transition-opacity duration-300"></div>
+
+  <script src="app.js"></script>
+</body>
+
+</html>
