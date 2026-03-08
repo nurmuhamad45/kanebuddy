@@ -12,15 +12,18 @@ app.use(cors());
 app.use(express.json());
 
 // --- 2. KONFIGURASI DATABASE ---
+// --- 2. KONFIGURASI DATABASE ---
 const db = mysql.createPool({
-    host: process.env.DB_HOST || 'localhost',
-    user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || '',
-    database: process.env.DB_NAME || 'budget_db',
-    port: process.env.DB_PORT || 3306,
-    waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0
+    host: process.env.DB_HOST,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME,
+    port: process.env.DB_PORT || 4000,
+    // INI KUNCI RAHASIA AGAR TIDB TIDAK MENOLAK KONEKSI 👇
+    ssl: {
+        minVersion: 'TLSv1.2',
+        rejectUnauthorized: true
+    }
 });
 
 // Cek apakah database berhasil terhubung
