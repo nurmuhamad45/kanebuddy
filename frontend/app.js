@@ -90,6 +90,14 @@ function loginUser(user) {
   loadUserData();
   document.getElementById('auth-screen').classList.add('hidden');
   updateUserUI(user);
+
+  // PANGGIL ULANG SEMUA DATA DARI DATABASE SETELAH LOGIN SUKSES 👇
+  getTransactionsFromDB();
+  getGoalsFromDB();
+  getBillsFromDB();
+  getShiftsFromDB();
+  getTasksFromDB();
+
   // Initial render
   updateDashboard(); renderPemasukan(); renderPengeluaran(); renderGoals(); renderBills(); renderShifts();
 }
@@ -1732,7 +1740,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!amount || amount <= 0) { showToast('Jumlah harus > 0', 'error'); return; }
 
     // 1. Kirim data ke MySQL (Tidak pakai transactions.push lagi)
-    saveTransactionToDB('income', amount, category, dateVal || new Date().toISOString(), title);
+    saveTransactionToDB('income', amount, category, dateVal || new Date().toISOString().split('T')[0], title);
 
     // 2. Bersihkan form
     formPemasukan.reset();
@@ -1754,8 +1762,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!amount || amount <= 0) { showToast('Jumlah harus > 0', 'error'); return; }
 
     // 1. Kirim data ke MySQL
-    saveTransactionToDB('expense', amount, category, dateVal || new Date().toISOString(), title);
-
+    saveTransactionToDB('expense', amount, category, dateVal || new Date().toISOString().split('T')[0], title);
     // 2. Bersihkan form
     formPengeluaran.reset();
     document.getElementById('input-pengeluaran-tanggal').value = new Date().toISOString().split('T')[0];
@@ -2316,7 +2323,7 @@ const API_URL = 'https://kanebuddy-bxvn.vercel.app/api/transactions';
 // 1. Fungsi MENGAMBIL data dari MySQL
 async function getTransactionsFromDB() {
   try {
-    const response = await fetch(API_URL);
+    const response = await fetch(API_URL + '?t=' + new Date().getTime());;
     const dbTransactions = await response.json();
 
     // Sesuaikan nama kolom DB (description) dengan yang dipakai UI (title)
@@ -2355,13 +2362,18 @@ async function saveTransactionToDB(type, amount, category, date, description) {
     });
 
     const result = await response.json();
-    console.log("Sukses menyimpan ke DB:", result);
 
-    // Panggil data terbaru dari DB setelah berhasil menyimpan
-    getTransactionsFromDB();
+    // Tampilkan notifikasi warna merah di HP jika ditolak MySQL 👇
+    if (!response.ok) {
+      showToast("Gagal: " + (result.error || "Server error"), "error");
+      return;
+    }
+
+    showToast("Berhasil tersimpan di Database!");
+    getTransactionsFromDB(); // Tarik data terbaru
 
   } catch (error) {
-    console.error("Ups, gagal menyimpan data:", error);
+    showToast("Ups, gagal menyimpan data", "error");
   }
 }
 
@@ -2383,7 +2395,7 @@ const BILLS_API = 'https://kanebuddy-bxvn.vercel.app/api/bills';
 // --- FUNGSI GOALS ---
 async function getGoalsFromDB() {
   try {
-    const res = await fetch(GOALS_API);
+    const res = await fetch(GOALS_API + '?t=' + new Date().getTime());
     const data = await res.json();
     goals = data.map(g => ({
       id: g.id, name: g.name, target: Number(g.target),
@@ -2418,7 +2430,7 @@ async function deleteGoal(id) {
 // --- FUNGSI BILLS ---
 async function getBillsFromDB() {
   try {
-    const res = await fetch(BILLS_API);
+    const res = await fetch(BILLS_API + '?t=' + new Date().getTime());
     const data = await res.json();
     bills = data.map(b => ({
       id: b.id, name: b.name, amount: Number(b.amount),
@@ -2473,7 +2485,7 @@ const SHIFTS_API = 'https://kanebuddy-bxvn.vercel.app/api/shifts';
 // 1. Ambil data Shift dari Database
 async function getShiftsFromDB() {
   try {
-    const res = await fetch(SHIFTS_API);
+    const res = await fetch(SHIFTS_API + '?t=' + new Date().getTime());
     const data = await res.json();
 
     // Sesuaikan format snake_case dari DB ke camelCase untuk UI
@@ -2548,7 +2560,7 @@ const TASKS_API = 'https://kanebuddy-bxvn.vercel.app/api/tasks';
 // 1. Ambil data Task dari Database
 async function getTasksFromDB() {
   try {
-    const res = await fetch(TASKS_API);
+    const res = await fetch(TASKS_API + '?t=' + new Date().getTime());
     const data = await res.json();
 
     tasks = data.map(t => ({
