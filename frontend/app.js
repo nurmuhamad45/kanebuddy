@@ -40,7 +40,7 @@ async function handleLogin(e) {
   const span = errEl ? errEl.querySelector('span') : null;
 
   try {
-    const res = await fetch('http://localhost:3000/api/auth/login', {
+    const res = await fetch('kanebuddy-bxvn.vercel.app/api/auth/login', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password: pass })
     });
@@ -68,7 +68,7 @@ async function handleRegister(e) {
   const userObj = { id: uid(), name, email, password: hashPw(pass) };
 
   try {
-    const res = await fetch('http://localhost:3000/api/auth/register', {
+    const res = await fetch('kanebuddy-bxvn.vercel.app/api/auth/register', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(userObj)
     });
@@ -136,9 +136,9 @@ async function saveProfileSettingsContinue(newName, newPass) {
     if (newPass.length < 6) { showToast('Password min. 6 karakter', 'error'); return; }
     currentUser.password = hashPw(newPass);
   }
-
   try {
-    const res = await fetch(`http://localhost:3000/api/auth/profile/${currentUser.id}`, {
+    const res = await fetch(`kanebuddy-bxvn.vercel.app
+/api/auth/profile/${currentUser.id}`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: currentUser.name, password: currentUser.password, photo: currentUser.photo })
     });
@@ -157,7 +157,7 @@ async function resetUserData() {
 
   try {
     // 1. Tembak API Reset di backend untuk mengosongkan MySQL
-    const response = await fetch('http://localhost:3000/api/reset', {
+    const response = await fetch('kanebuddy-bxvn.vercel.app/api/reset', {
       method: 'DELETE'
     });
 
@@ -187,8 +187,8 @@ async function deleteAccount() {
   if (!confirm(`Yakin hapus akun "${currentUser.name}"? SEMUA data akan hilang permanen!`)) return;
 
   try {
-    await fetch(`http://localhost:3000/api/auth/${currentUser.id}`, { method: 'DELETE' });
-    await fetch('http://localhost:3000/api/reset', { method: 'DELETE' }); // Opsional: Kosongkan transaksi juga
+    await fetch(`kanebuddy-bxvn.vercel.app/api/auth/${currentUser.id}`, { method: 'DELETE' });
+    await fetch('kanebuddy-bxvn.vercel.app/api/reset', { method: 'DELETE' }); // Opsional: Kosongkan transaksi juga
 
     ['budget_transactions', 'budget_goals', 'budget_bills', 'budget_shifts'].forEach(k => localStorage.removeItem(userKey(k)));
     clearSession();
@@ -2337,7 +2337,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // =====================================================================
 // NODE.JS BACKEND INTEGRATION
 // =====================================================================
-const API_URL = 'http://localhost:3000/api/transactions';
+const API_URL = 'kanebuddy-bxvn.vercel.app/api/transactions';
 
 // 1. Fungsi MENGAMBIL data dari MySQL
 async function getTransactionsFromDB() {
@@ -2403,8 +2403,8 @@ document.addEventListener('DOMContentLoaded', () => {
 // ==========================================
 // API UNTUK GOALS & BILLS
 // ==========================================
-const GOALS_API = 'http://localhost:3000/api/goals';
-const BILLS_API = 'http://localhost:3000/api/bills';
+const GOALS_API = 'kanebuddy-bxvn.vercel.app/api/goals';
+const BILLS_API = 'kanebuddy-bxvn.vercel.app/api/bills';
 
 // --- FUNGSI GOALS ---
 async function getGoalsFromDB() {
@@ -2494,7 +2494,7 @@ async function deleteBill(id) {
 // ==========================================
 // API UNTUK SHIFT KERJA
 // ==========================================
-const SHIFTS_API = 'http://localhost:3000/api/shifts';
+const SHIFTS_API = 'kanebuddy-bxvn.vercel.app/api/shifts';
 
 // 1. Ambil data Shift dari Database
 async function getShiftsFromDB() {
@@ -2569,7 +2569,7 @@ async function deleteShift(id) {
 // ==========================================
 // API UNTUK TASKS & PROJECT
 // ==========================================
-const TASKS_API = 'http://localhost:3000/api/tasks';
+const TASKS_API = 'kanebuddy-bxvn.vercel.app/api/tasks';
 
 // 1. Ambil data Task dari Database
 async function getTasksFromDB() {
