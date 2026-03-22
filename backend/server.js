@@ -12,18 +12,16 @@ app.use(cors());
 app.use(express.json());
 
 // --- 2. KONFIGURASI DATABASE ---
-// --- 2. KONFIGURASI DATABASE ---
 const db = mysql.createPool({
-    host: process.env.DB_HOST,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME,
-    port: process.env.DB_PORT || 4000,
-    // INI KUNCI RAHASIA AGAR TIDB TIDAK MENOLAK KONEKSI 👇
-    ssl: {
-        minVersion: 'TLSv1.2',
-        rejectUnauthorized: true
-    }
+    host: 'localhost',
+    user: 'root',
+    password: '',
+    database: 'budget_db', // Pastikan nama database lokalmu benar
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0,
+    dateStrings: true,
+
 });
 
 // Cek apakah database berhasil terhubung
@@ -153,13 +151,43 @@ app.get('/api/shifts', (req, res) => {
     });
 });
 
+// Rute untuk menambah Shift Baru
 app.post('/api/shifts', (req, res) => {
-    const { date, type, start_time, end_time, hours, normal_hours, overtime_hours, hourly_rate, earnings } = req.body;
-    const sql = 'INSERT INTO shifts (date, type, start_time, end_time, hours, normal_hours, overtime_hours, hourly_rate, earnings) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)';
-    db.query(sql, [date, type, start_time, end_time, hours, normal_hours, overtime_hours, hourly_rate, earnings], (err, result) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ message: 'Shift tersimpan!', id: result.insertId });
-    });
+    // 1. Tangkap SEMUA data yang dikirim dari frontend (termasuk data gaji & lembur baru)
+    const {
+        date,
+        type,
+        start_time,
+        end_time,
+        hours,
+        normal_hours,
+        overtime_hours,
+        hourly_rate,
+        earnings
+    } = req.body;
+
+    // 2. Query INSERT yang sudah diperbarui dengan kolom-kolom baru
+    const query = `
+    INSERT INTO shifts 
+    (date, type, start_time, end_time, hours, normal_hours, overtime_hours, hourly_rate, earnings) 
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `;
+
+    // 3. Eksekusi ke database
+    db.query(
+        query,
+        [date, type, start_time, end_time, hours, normal_hours, overtime_hours, hourly_rate, earnings],
+        (err, results) => {
+            if (err) {
+                console.error("Gagal insert shift:", err);
+                return res.status(500).json({ error: err.message });
+            }
+            res.json({
+                id: results.insertId,
+                message: "Shift berhasil disimpan dengan detail gaji!"
+            });
+        }
+    );
 });
 
 // PUT: Mengubah status shift menjadi sudah dicatat (recorded = true)
@@ -189,10 +217,13 @@ app.get('/api/tasks', (req, res) => {
 });
 
 app.post('/api/tasks', (req, res) => {
-    const { title, status } = req.body;
-    db.query('INSERT INTO tasks (title, status) VALUES (?, ?)', [title, status], (err, result) => {
+    // Tangkap data tag tambahan
+    const { title, status, due_date, priority, tag } = req.body;
+
+    const query = `INSERT INTO tasks (title, status, due_date, priority, tag) VALUES (?, ?, ?, ?, ?)`;
+    db.query(query, [title, status, due_date, priority, tag], (err, results) => {
         if (err) return res.status(500).json({ error: err.message });
-        res.json({ message: 'Task tersimpan!', id: result.insertId });
+        res.json({ id: results.insertId, message: "Task disimpan!" });
     });
 });
 // PUT: Update status task (misal dari pending -> completed)
@@ -210,6 +241,61 @@ app.delete('/api/tasks/:id', (req, res) => {
     db.query('DELETE FROM tasks WHERE id = ?', [req.params.id], (err) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ message: 'Task dihapus!' });
+    });
+});
+
+// ==========================================
+// 💸 API UNTUK REMITTANCE (KIRIM UANG)
+// ==========================================
+app.get('/api/remittances', (req, res) => {
+    db.query('SELECT * FROM remittances ORDER BY date DESC', (err, results) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(results);
+    });
+});
+
+app.post('/api/remittances', (req, res) => {
+    const { date, amount_jpy, exchange_rate, amount_idr, provider, notes } = req.body;
+    const sql = 'INSERT INTO remittances (date, amount_jpy, exchange_rate, amount_idr, provider, notes) VALUES (?, ?, ?, ?, ?, ?)';
+
+    db.query(sql, [date, amount_jpy, exchange_rate, amount_idr, provider, notes], (err, result) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ message: 'Data kirim uang tersimpan!', id: result.insertId });
+    });
+});
+
+app.delete('/api/remittances/:id', (req, res) => {
+    db.query('DELETE FROM remittances WHERE id = ?', [req.params.id], (err) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ message: 'Data kirim uang dihapus!' });
+    });
+});
+
+// ==========================================
+// 🚨 API UNTUK DOKUMEN PENTING (ZAIRYU/KONTRAK)
+// ==========================================
+app.get('/api/documents', (req, res) => {
+    // Kita urutkan dari tanggal kedaluwarsa yang paling dekat (ASC)
+    db.query('SELECT * FROM documents ORDER BY expiry_date ASC', (err, results) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(results);
+    });
+});
+
+app.post('/api/documents', (req, res) => {
+    const { title, type, expiry_date, notes } = req.body;
+    const sql = 'INSERT INTO documents (title, type, expiry_date, notes) VALUES (?, ?, ?, ?)';
+
+    db.query(sql, [title, type, expiry_date, notes], (err, result) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ message: 'Dokumen berhasil dicatat!', id: result.insertId });
+    });
+});
+
+app.delete('/api/documents/:id', (req, res) => {
+    db.query('DELETE FROM documents WHERE id = ?', [req.params.id], (err) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ message: 'Dokumen dihapus!' });
     });
 });
 
@@ -287,11 +373,37 @@ app.delete('/api/reset', (req, res) => {
     });
 });
 
+// ==========================================
+// 🏦 API UNTUK KALKULATOR NENKIN
+// ==========================================
+app.get('/api/nenkin', (req, res) => {
+    db.query('SELECT * FROM nenkin ORDER BY date DESC', (err, results) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(results);
+    });
+});
+
+app.post('/api/nenkin', (req, res) => {
+    const { date, avg_salary, months, estimated_amount, notes } = req.body;
+    const sql = 'INSERT INTO nenkin (date, avg_salary, months, estimated_amount, notes) VALUES (?, ?, ?, ?, ?)';
+
+    db.query(sql, [date, avg_salary, months, estimated_amount, notes], (err, result) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ message: 'Estimasi Nenkin tersimpan!', id: result.insertId });
+    });
+});
+
+app.delete('/api/nenkin/:id', (req, res) => {
+    db.query('DELETE FROM nenkin WHERE id = ?', [req.params.id], (err) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ message: 'Data dihapus!' });
+    });
+});
+
 // --- 4. JALANKAN SERVER ---
-// Gunakan port dari Cloud, atau 3000 jika di lokal
-const PORT = process.env.PORT || 3000;
+const PORT = 3000;
 app.listen(PORT, () => {
-    console.log(`Server siap melayani di port ${PORT}`);
+    console.log(`Server siap melayani di port http://localhost:${PORT}`);
 });
 
 // UNTUK DEPLOY DI VERCEL 👇
