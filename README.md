@@ -78,6 +78,7 @@ Ikuti langkah-langkah berikut untuk menjalankan KaneBuddy di komputermu:
 2. Sangat disarankan untuk membukanya menggunakan ekstensi **Live Server** di VS Code agar aplikasi berjalan optimal.
 
 ---
+![Dashboard Preview](./assets/KaneBuddy_Dashboard.png)
 
 ## 🤝 Kontribusi (Contributing)
 Proyek ini adalah proyek portofolio pribadi. Namun, jika kamu menemukan *bug* atau memiliki ide fitur baru, silakan buka *Issues* atau buat *Pull Request*.
