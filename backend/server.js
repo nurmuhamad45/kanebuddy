@@ -406,5 +406,25 @@ app.listen(PORT, () => {
     console.log(`Server siap melayani di port http://localhost:${PORT}`);
 });
 
+// ==========================================
+// 📋 API TAMBAHAN UNTUK SUB-TASKS
+// ==========================================
+
+// Route untuk memperbarui subtasks pada sebuah task tertentu
+app.put('/api/tasks/:id/subtasks', (req, res) => {
+    const taskId = req.params.id;
+    const { subtasks } = req.body; // Ini adalah string JSON dari frontend
+
+    const sql = 'UPDATE tasks SET subtasks = ? WHERE id = ?';
+
+    db.query(sql, [subtasks, taskId], (err, result) => {
+        if (err) {
+            console.error("Gagal update subtasks:", err);
+            return res.status(500).json({ error: err.message });
+        }
+        res.json({ message: 'Subtasks berhasil diperbarui!' });
+    });
+});
+
 // UNTUK DEPLOY DI VERCEL 👇
 module.exports = app;

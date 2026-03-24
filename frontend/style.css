@@ -45,10 +45,9 @@
 
 /* Active Nav Item Styling */
 .nav-item.active {
-  background-color: #3b82f6;
+  background: linear-gradient(60deg, #4285f4, #72cb81, #d9be65);
   /* primary color */
   color: white !important;
-  box-shadow: 0 4px 14px 0 rgba(4, 141, 221, 0.39);
 }
 
 .nav-item.active i {
@@ -56,11 +55,13 @@
 }
 
 .dark .nav-item.active {
-  background-color: #3b82f6;
+  background: linear-gradient(60deg, #4285f4, #72cb81, #d9be65);
+
 }
 
 .nav-item:not(.active):hover {
   background-color: #f3faff;
+
   /* lightened neutral/primary hover */
 }
 

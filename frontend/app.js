@@ -1097,92 +1097,6 @@ async function deleteTransaction(id) {
   }
 }
 
-// GOALS V1=====================================================================
-// // GOALS
-// // =====================================================================
-// function renderGoals() {
-//   const el = document.getElementById('goals-list'); if (!el) return;
-//   let html = goals.map(g => {
-//     const pct = Math.min(100, Math.round((g.saved / g.target) * 100));
-//     return `<div class="bg-white dark:bg-dark-surface border border-light-border dark:border-dark-border rounded-3xl p-6 shadow-sm group hover-scale">
-//             <div class="flex justify-between items-center mb-4">
-//                 <div class="w-12 h-12 rounded-lg bg-${g.color}-100 dark:bg-${g.color}-500/20 flex items-center justify-center text-${g.color}-500 group-hover:bg-${g.color}-500 group-hover:text-white transition-colors">
-//                     <i class="ph ph-${g.icon} text-xl"></i>
-//                 </div>
-//                 <div class="flex items-center gap-2">
-//                     <button onclick="showAddSavingModal('${g.id}')" class="p-1.5 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-500/20 text-emerald-500 transition-colors"><i class="ph ph-plus-circle text-lg"></i></button>
-//                     <button onclick="deleteGoal('${g.id}')" class="p-1.5 rounded-lg hover:bg-rose-100 dark:hover:bg-rose-500/20 text-rose-500 transition-colors"><i class="ph ph-trash text-lg"></i></button>
-//                 </div>
-//             </div>
-//             <h3 class="font-bold text-lg text-slate-900 dark:text-white mb-1">${g.name}</h3>
-//             <p class="text-sm text-slate-500 mb-6">Target: ${g.deadline || 'Tanpa batas waktu'}</p>
-//             <div class="mb-2 flex justify-between items-end">
-//                 <h4 class="text-2xl font-bold text-slate-900 dark:text-white">${formatCurrency(g.saved)}</h4>
-//                 <span class="text-sm text-slate-500">/ ${formatCurrency(g.target)}</span>
-//             </div>
-//             <div class="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 mb-3 overflow-hidden">
-//                 <div class="bg-${g.color}-500 h-2 rounded-full transition-all duration-500" style="width:${pct}%"></div>
-//             </div>
-//             <p class="text-xs font-medium text-${g.color}-500 bg-${g.color}-50 dark:bg-${g.color}-500/10 w-max px-2 py-1 rounded-lg">${pct}% Tercapai</p>
-//         </div>`;
-//   }).join('');
-//   html += `<div onclick="showGoalForm()" class="border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-3xl p-6 flex flex-col items-center justify-center text-slate-400 hover:text-primary hover:border-primary hover:bg-primary/5 transition-all cursor-pointer group hover-scale min-h-[260px]">
-//         <div class="w-14 h-14 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center group-hover:bg-primary group-hover:text-white transition-colors mb-4"><i class="ph ph-plus text-2xl"></i></div>
-//         <p class="font-medium">Buat Goal Baru</p>
-//     </div>`;
-//   el.innerHTML = html;
-// }
-
-// function deleteGoal(id) {
-//   if (!confirm('Yakin hapus goal ini?')) return;
-//   goals = goals.filter(g => g.id !== id); saveAll(); renderGoals(); renderDashboardGoals(); showToast('Goal dihapus');
-// }
-// function showGoalForm() {
-//   const s = document.getElementById('goal-form-section'); if (!s) return;
-//   s.classList.toggle('hidden');
-//   if (!s.classList.contains('hidden')) s.scrollIntoView({ behavior: 'smooth', block: 'start' });
-// }
-// // Fungsi MENAMBAH tabungan ke Goal (MySQL Update)
-// async function showAddSavingModal(goalId) {
-//   // Gunakan == (bukan ===) agar String dari HTML bisa cocok dengan Number dari MySQL
-//   const g = goals.find(g => g.id == goalId);
-//   if (!g) {
-//     console.error("Goal tidak ditemukan dengan ID:", goalId);
-//     return;
-//   }
-
-//   // Munculkan pop-up minta input angka
-//   const amt = prompt(`Tambah tabungan untuk "${g.name}" (¥):`);
-//   if (!amt || isNaN(parseInt(amt))) return; // Batal jika kosong/bukan angka
-
-//   // Hitung total tabungan baru (jangan sampai melebihi target)
-//   const newSaved = Math.min(g.target, g.saved + parseInt(amt));
-
-//   try {
-//     // Kirim perintah UPDATE ke backend
-//     const response = await fetch(`${GOALS_API}/${g.id}`, {
-//       method: 'PUT',
-//       headers: { 'Content-Type': 'application/json' },
-//       body: JSON.stringify({ saved: newSaved })
-//     });
-
-//     if (!response.ok) throw new Error('Gagal update ke database');
-
-//     showToast(`Tabungan untuk "${g.name}" berhasil ditambahkan!`);
-
-//     // Tarik data terbaru dari DB agar UI ter-update
-//     getGoalsFromDB();
-
-//   } catch (error) {
-//     console.error("🚨 Error:", error);
-//     showToast('Gagal menambah tabungan ke server', 'error');
-//   }
-// }
-
-// =====================================================================
-// BILLS
-// =====================================================================
-
 // =====================================================================
 // GOALS & KALKULATOR TABUNGAN PINTAR (AI)
 // =====================================================================
@@ -2096,6 +2010,12 @@ document.addEventListener("DOMContentLoaded", () => {
         v.classList.add("hidden");
       });
       const viewName = item.getAttribute("data-view");
+
+      // LAZY LOADING: Panggil fungsi render hanya untuk view yang dibuka
+      if (typeof handleLazyRender === "function") {
+        handleLazyRender(viewName);
+      }
+
       const sel = document.getElementById(`view-${viewName}`);
       if (sel) {
         sel.classList.remove("hidden");
@@ -2888,10 +2808,18 @@ function renderTasks() {
       dueHtml = `<span class="flex items-center gap-1 text-[10px] font-bold text-${dColor}-600 dark:text-${dColor}-400 bg-${dColor}-100 dark:bg-${dColor}-500/20 px-2 py-0.5 rounded border border-${dColor}-200 dark:border-${dColor}-500/30 uppercase tracking-wide"><i class="ph-fill ${dIcon}"></i> ${dText}</span>`;
     }
     const tagText = t.tag || 'Lainnya';
-    const tagHtml = `<span class="flex items-center gap-1 text-[10px] font-bold text-sky-600 dark:text-sky-400 bg-sky-100 dark:bg-sky-500/20 px-2 py-0.5 rounded border border-sky-200 dark:border-sky-500/30 uppercase tracking-wide"><i class="ph-bold ph-tag"></i> ${tagText}</span>`;
+    const subCount = (t.subtasks || []).length;
+    const subDone = (t.subtasks || []).filter(s => s.done).length;
+    const subPct = subCount > 0 ? Math.round((subDone / subCount) * 100) : 0;
+    const subHtml = subCount > 0
+      ? `<span class="flex items-center gap-1 text-[10px] font-bold ${subPct === 100 ? 'text-emerald-500 bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200' : 'text-slate-500 bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700'} px-2 py-0.5 rounded border uppercase tracking-wide" title="Subtask Progress"><i class="ph-bold ph-check-square"></i> ${subPct}% (${subDone}/${subCount})</span>`
+      : '';
+    const addSubtaskBtn = `<button onclick="event.stopPropagation(); openTaskDetail('${t.id}')" title="Tambah Subtask" class="flex items-center justify-center w-5 h-5 rounded-md text-slate-400 hover:text-sky-500 bg-slate-100 dark:bg-slate-800 hover:bg-sky-50 dark:hover:bg-sky-500/10 transition-colors shrink-0"><i class="ph-bold ph-plus"></i></button>`;
+    const tagHtml = `<span class="flex items-center gap-1 text-[10px] font-bold text-sky-600 dark:text-sky-400 bg-sky-100 dark:bg-sky-500/20 px-2 py-0.5 rounded border border-sky-200 dark:border-sky-500/30 uppercase tracking-wide"><i class="ph-bold ph-tag"></i> ${tagText}</span> ${subHtml} ${addSubtaskBtn}`;
+
 
     return `
-      <div class="bg-white dark:bg-dark-surface border border-light-border dark:border-dark-border p-5 rounded-2xl shadow-sm hover:shadow-md transition-all flex flex-col gap-3 relative overflow-hidden border-l-4 ${isDone ? 'border-l-slate-300 dark:border-l-slate-600 opacity-60' : prio.border}">
+  <div onclick="openTaskDetail('${t.id}')" class="cursor-pointer bg-white dark:bg-dark-surface border border-light-border dark:border-dark-border p-5 rounded-2xl shadow-sm hover:shadow-md transition-all flex flex-col gap-3 relative overflow-hidden border-l-4 ${isDone ? 'border-l-slate-300 dark:border-l-slate-600 opacity-60' : prio.border}">
          <div class="flex items-start justify-between gap-3">
             <div class="flex-1 min-w-0">
                <div class="flex flex-wrap items-center gap-2 mb-2">
@@ -3017,13 +2945,23 @@ function renderKanbanBoard() {
     }
 
     const tagHtml = `<span class="flex items-center gap-1 text-[10px] font-bold text-sky-600 dark:text-sky-400 bg-sky-100 dark:bg-sky-500/20 px-2 py-0.5 rounded border border-sky-200 dark:border-sky-500/30 uppercase tracking-wide"><i class="ph-bold ph-tag"></i> ${t.tag || 'Lainnya'}</span>`;
+    const subCount = (t.subtasks || []).length;
+    const subDone = (t.subtasks || []).filter(s => s.done).length;
+    const subPct = subCount > 0 ? Math.round((subDone / subCount) * 100) : 0;
+    const subHtml = subCount > 0
+      ? `<span class="flex items-center gap-1 text-[10px] font-bold ${subPct === 100 ? 'text-emerald-500 bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200' : 'text-slate-500 bg-slate-50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-700'} px-1.5 py-0.5 rounded border uppercase tracking-wide" title="Subtask Progress"><i class="ph-bold ph-check-square"></i> ${subPct}% (${subDone}/${subCount})</span>`
+      : '';
+    const addSubtaskBtn = `<button onclick="event.stopPropagation(); openTaskDetail('${t.id}')" title="Tambah Subtask" class="flex items-center justify-center w-5 h-5 rounded-md text-slate-400 hover:text-sky-500 bg-slate-50 dark:bg-slate-900/50 hover:bg-sky-50 dark:hover:bg-sky-500/10 transition-colors shrink-0"><i class="ph-bold ph-plus"></i></button>`;
+
 
     return `
-        <div draggable="true" ondragstart="dragTask(event, '${t.id}')" 
-             class="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 cursor-grab active:cursor-grabbing hover:shadow-md transition-all relative border-l-4 ${isDone ? 'border-l-slate-300 opacity-60' : prio.border}">
+    <div draggable="true" ondragstart="dragTask(event, '${t.id}')" onclick="openTaskDetail('${t.id}')" 
+         class="cursor-pointer bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 cursor-grab active:cursor-grabbing hover:shadow-md transition-all relative border-l-4 ${isDone ? 'border-l-slate-300 opacity-60' : prio.border}">
            <div class="flex flex-wrap items-center gap-2 mb-3">
               <span class="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-${prio.color}-500 bg-${prio.color}-50 dark:bg-${prio.color}-500/10 px-2 py-0.5 rounded border border-${prio.color}-200 dark:border-${prio.color}-500/20" title="Prioritas"><i class="ph-fill ${prio.icon}"></i></span>
               ${tagHtml}
+              ${subHtml}
+              ${addSubtaskBtn}
               ${dueHtml}
            </div>
            <h4 class="font-bold text-slate-900 dark:text-white text-sm leading-snug ${isDone ? 'line-through text-slate-400' : ''}">${t.title}</h4>
@@ -3361,7 +3299,8 @@ async function getTasksFromDB() {
       status: t.status,
       dueDate: t.due_date || t.dueDate || null,
       priority: t.priority || 'medium',
-      tag: t.tag || 'Lainnya' // 👈 BACA TAG DARI DB
+      tag: t.tag || 'Lainnya',
+      subtasks: (typeof t.subtasks === 'string' ? JSON.parse(t.subtasks || '[]') : t.subtasks) || []
     }));
 
     saveAll();
@@ -3452,9 +3391,16 @@ let remittances = [];
 // Fungsi Navigasi Sub-Menu (Remittance, Documents, Nenkin)
 function bukaHalaman(viewId) {
   // 1. Sembunyikan semua section
-  document.querySelectorAll(".view-section").forEach((v) => v.classList.remove("active"));
+  document.querySelectorAll(".view-section").forEach((v) => {
+    v.classList.remove("active");
+    v.classList.add("hidden");
+  });
   // 2. Tampilkan yang diminta
-  document.getElementById(viewId).classList.add("active");
+  const targetView = document.getElementById(viewId);
+  if (targetView) {
+    targetView.classList.remove("hidden");
+    targetView.classList.add("active");
+  }
   // 3. Panggil data sesuai halaman yang dibuka
   if (viewId === "view-remittance") getRemittancesFromDB();
   if (viewId === "view-documents") getDocumentsFromDB();
@@ -4573,5 +4519,140 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 });
 
+let activeTaskIdForSubtask = null;
+window.openTaskDetail = function (id) {
+  // Pastikan perbandingan ID kuat
+  const t = tasks.find(x => String(x.id) === String(id));
+  if (!t) return;
+
+  activeTaskIdForSubtask = id;
+
+  document.getElementById('detail-task-title').textContent = t.title;
+  renderSubtasks();
+  document.getElementById('modal-task-detail').classList.remove('hidden');
+};
+
+window.closeTaskDetail = function () {
+  document.getElementById('modal-task-detail').classList.add('hidden');
+  activeTaskIdForSubtask = null;
+};
+
+function renderSubtasks() {
+  const t = tasks.find(x => String(x.id) === String(activeTaskIdForSubtask));
+  const container = document.getElementById('subtask-list-container');
+  if (!t || !container) return;
+
+  const list = t.subtasks || [];
+  const completed = list.filter(s => s.done).length;
+  const pct = list.length ? Math.round((completed / list.length) * 100) : 0;
+
+  // Update Progress UI
+  document.getElementById('subtask-progress-bar').style.width = `${pct}%`;
+  document.getElementById('subtask-progress-text').textContent = `${pct}% Selesai (${completed}/${list.length})`;
+
+  container.innerHTML = list.map((s, index) => `
+    <div class="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl group border border-transparent hover:border-sky-500/30 transition-all">
+      <input type="checkbox" ${s.done ? 'checked' : ''} onchange="toggleSubtask(${index})" class="w-5 h-5 rounded border-slate-300 text-sky-500 focus:ring-sky-500 cursor-pointer">
+      <span class="flex-1 text-sm ${s.done ? 'line-through text-slate-400' : 'text-slate-700 dark:text-slate-300'} font-medium">${s.text}</span>
+      <button onclick="deleteSubtask(${index})" class="opacity-0 group-hover:opacity-100 text-rose-500 p-1 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-lg transition-all"><i class="ph ph-trash"></i></button>
+    </div>
+  `).join('');
+
+  renderTasks(); // Update lencana progres di kartu utama
+}
+
+window.addNewSubtask = async function () {
+  const input = document.getElementById('input-new-subtask');
+  const text = input.value.trim();
+  if (!text) return;
+
+  const t = tasks.find(x => String(x.id) === String(activeTaskIdForSubtask));
+  if (!t.subtasks) t.subtasks = [];
+  t.subtasks.push({ text, done: false });
+
+  await saveSubtasksToDB(t.id, t.subtasks);
+  input.value = '';
+  renderSubtasks();
+};
+
+window.toggleSubtask = async function (index) {
+  const t = tasks.find(x => String(x.id) === String(activeTaskIdForSubtask));
+  t.subtasks[index].done = !t.subtasks[index].done;
+  await saveSubtasksToDB(t.id, t.subtasks);
+  renderSubtasks();
+};
+
+window.deleteSubtask = async function (index) {
+  const t = tasks.find(x => String(x.id) === String(activeTaskIdForSubtask));
+  t.subtasks.splice(index, 1);
+  await saveSubtasksToDB(t.id, t.subtasks);
+  renderSubtasks();
+};
+
+async function saveSubtasksToDB(taskId, subtasksArray) {
+  saveAll(); // Simpan lokal dulu
+  try {
+    await fetch(`${TASKS_API}/${taskId}/subtasks`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ subtasks: JSON.stringify(subtasksArray) }),
+    });
+  } catch (err) { console.error("Gagal sinkron subtasks:", err); }
+}
+
 // Hubungkan tombol Atur Kategori di HTML ke sistem kategori bawaan aplikasi
 window.openCategoryModal = window.showCategoryModal;
+
+// ==========================================
+// 🚀 LAZY LOADING & SKELETON
+// ==========================================
+
+// Fungsi pembantu untuk Lazy Loading
+window.handleLazyRender = function (view) {
+  const containerId = getViewContainerId(view);
+  if (!containerId) return;
+
+  // Tampilkan Skeleton jika data belum ada
+  const container = document.getElementById(containerId);
+  if (container && container.innerHTML.trim() === "") {
+    showSkeleton(container);
+  }
+
+  // Delay tipis untuk efek transisi yang mulus
+  setTimeout(() => {
+    switch (view) {
+      case 'pemasukan': if (typeof renderPemasukan === 'function') renderPemasukan(); break;
+      case 'pengeluaran': if (typeof renderPengeluaran === 'function') renderPengeluaran(); break;
+      case 'task': if (typeof renderTasks === 'function') renderTasks(); break;
+      case 'goals': if (typeof renderGoals === 'function') renderGoals(); break;
+      case 'bills': if (typeof renderBills === 'function') renderBills(); break;
+      case 'shifts': if (typeof renderShifts === 'function') renderShifts(); break;
+      case 'aset': if (typeof renderAssets === 'function') renderAssets(); break;
+    }
+  }, 150);
+}
+
+window.showSkeleton = function (container) {
+  container.innerHTML = `
+    <div class="space-y-4 w-full">
+      <div class="skeleton h-24 w-full rounded-2xl"></div>
+      <div class="skeleton h-24 w-full rounded-2xl"></div>
+      <div class="skeleton h-24 w-full rounded-2xl"></div>
+    </div>`;
+}
+
+window.getViewContainerId = function (view) {
+  const map = {
+    'pemasukan': 'pemasukan-history',
+    'pengeluaran': 'pengeluaran-history',
+    'task': 'task-list', // atau task-board
+    'goals': 'goals-list',
+    'bills': 'bills-list',
+    'shifts': 'shifts-list',
+    'aset': 'asset-list'
+  };
+  return map[view];
+}
+
+
+
