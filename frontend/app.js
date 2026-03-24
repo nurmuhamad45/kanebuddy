@@ -140,8 +140,19 @@ async function handleRegister(e) {
   }
 }
 
+// Bersihkan data lama (tanpa prefix user) dari localStorage warisan versi lama
+function clearLegacyLocalStorage() {
+  const legacyKeys = [
+    'budget_transactions', 'budget_goals', 'budget_bills',
+    'budget_shifts', 'budget_tasks', 'budget_categories',
+    'budget_recurring', 'budget_debts', 'budget_budgets', 'budget_assets'
+  ];
+  legacyKeys.forEach(k => localStorage.removeItem(k));
+}
+
 function loginUser(user) {
   saveSession(user);
+  clearLegacyLocalStorage(); // Hapus data lama tanpa prefix user
   loadUserData();
   document.getElementById("auth-screen").classList.add("hidden");
   updateUserUI(user);
@@ -322,7 +333,7 @@ function loadUserData() {
   goals = JSON.parse(localStorage.getItem(userKey("budget_goals"))) || [];
   bills = JSON.parse(localStorage.getItem(userKey("budget_bills"))) || [];
   shifts = JSON.parse(localStorage.getItem(userKey("budget_shifts"))) || [];
-  tasks = JSON.parse(localStorage.getItem(userKey("budget_tasks"))) || [];
+  tasks = []; // Tasks diambil dari database via getTasksFromDB()
   categories = JSON.parse(localStorage.getItem(userKey("budget_categories"))) || [
     { name: "Makanan & Minuman", color: "#f97316" },
     { name: "Transportasi", color: "#0ea5e9" },
@@ -348,7 +359,7 @@ function saveAll() {
   localStorage.setItem(userKey("budget_goals"), JSON.stringify(goals));
   localStorage.setItem(userKey("budget_bills"), JSON.stringify(bills));
   localStorage.setItem(userKey("budget_shifts"), JSON.stringify(shifts));
-  localStorage.setItem(userKey("budget_tasks"), JSON.stringify(tasks));
+  // tasks tidak disimpan ke localStorage (pakai database)
   localStorage.setItem(userKey("budget_categories"), JSON.stringify(categories));
   localStorage.setItem(userKey("budget_recurring"), JSON.stringify(recurring));
   localStorage.setItem(userKey("budget_budgets"), JSON.stringify(budgets));

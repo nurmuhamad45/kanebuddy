@@ -35,13 +35,15 @@ const db = mysql.createPool({
 db.getConnection((err, connection) => {
     if (err) {
         console.error('Ups! Gagal terhubung ke MySQL. Pastikan XAMPP menyala.', err.message);
-        const tables = ['transactions', 'goals', 'bills', 'shifts', 'tasks', 'remittances', 'documents', 'nenkin'];
-        tables.forEach(table => {
-            connection.query(`ALTER TABLE ${table} ADD COLUMN user_id VARCHAR(255) DEFAULT 'default_user'`, () => { });
-        });
-        console.log('Yeay! Berhasil terhubung ke database MySQL dan melakukan pengecekan Schema!');
-        connection.release();
+        return;
+    }
+    const tables = ['transactions', 'goals', 'bills', 'shifts', 'tasks', 'remittances', 'documents', 'nenkin'];
+    tables.forEach(table => {
+        connection.query(`ALTER TABLE ${table} ADD COLUMN user_id VARCHAR(255) DEFAULT 'default_user'`, () => { });
     });
+    console.log('Yeay! Berhasil terhubung ke database MySQL dan melakukan pengecekan Schema!');
+    connection.release();
+});
 
 // --- 3. API ENDPOINTS (Rute Data) ---
 
