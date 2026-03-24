@@ -4,6 +4,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#6366f1" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="KaneBuddy" />
+  <link rel="manifest" href="manifest.json" />
   <title>KaneBuddy Budget Management</title>
   <!-- Tailwind CSS (via CDN) -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -368,6 +373,11 @@
         <i class="ph ph-squares-four text-xl shrink-0"></i>
         <span class="sidebar-text font-medium truncate">Dashboard</span>
       </a>
+      <a href="#" data-view="analisis" title="Analisis"
+        class="nav-item flex items-center gap-3 px-4 py-2.5 rounded-full text-slate-500 transition-all duration-200">
+        <i class="ph ph-trend-up text-xl text-indigo-500 shrink-0"></i>
+        <span class="sidebar-text font-medium truncate">Analisis</span>
+      </a>
       <a href="#" data-view="pemasukan" title="Pemasukan"
         class="nav-item flex items-center gap-3 px-4 py-2.5 rounded-full text-slate-500 transition-all duration-200">
         <i class="ph ph-arrow-circle-down text-xl text-emerald-500 shrink-0"></i>
@@ -386,7 +396,7 @@
       <a href="#" data-view="aset" title="Pemantau Aset"
         class="nav-item flex items-center gap-3 px-4 py-2.5 rounded-full text-slate-500 transition-all duration-200">
         <i class="ph ph-vault text-xl text-amber-500 shrink-0"></i>
-        <span class="sidebar-text font-medium truncate">Asets</span>
+        <span class="sidebar-text font-medium truncate">Aset</span>
       </a>
       <a href="#" data-view="goals" title="Goals"
         class="nav-item flex items-center gap-3 px-4 py-2.5 rounded-full text-slate-500 transition-all duration-200">
@@ -499,6 +509,90 @@
 
     <!-- Content Area -->
     <div id="content-area" class="flex-1 overflow-y-auto custom-scrollbar p-6 md:p-10 pb-24 md:pb-10 relative">
+
+      <!-- Analisis View -->
+      <div id="view-analisis" class="view-section hidden animate-fade-in space-y-8">
+        <div class="flex items-center justify-between mb-8">
+          <div>
+            <h2 class="text-2xl font-bold text-slate-900 dark:text-white mb-2">Analisis & Wawasan</h2>
+            <p class="text-slate-500 dark:text-slate-400">Pahami tren keuangan dan raih kebebasan finansialmu.</p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <!-- AI Insight -->
+          <div
+            class="bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 p-[2px] rounded-3xl shadow-lg hover-scale">
+            <div class="bg-white dark:bg-dark-surface rounded-[22px] p-6 h-full flex flex-col">
+              <div class="flex items-center gap-3 mb-4">
+                <div
+                  class="w-12 h-12 rounded-full bg-purple-100 dark:bg-purple-500/20 flex items-center justify-center border border-purple-200 dark:border-purple-500/30">
+                  <i class="ph-fill ph-magic-wand text-2xl text-purple-600 dark:text-purple-400 animate-pulse"></i>
+                </div>
+                <h3 class="text-lg font-bold text-slate-900 dark:text-white">KaneBuddy AI Insight</h3>
+              </div>
+              <div id="analisis-ai-text"
+                class="text-slate-600 dark:text-slate-300 leading-relaxed text-sm flex-1 space-y-2">
+                <p class="flex items-center gap-2 text-slate-400"><i class="ph ph-spinner animate-spin text-lg"></i>
+                  Menganalisis data Anda...</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Smart Alerts -->
+          <div
+            class="bg-white dark:bg-dark-surface border border-light-border dark:border-dark-border rounded-3xl p-6 shadow-sm hover-scale flex flex-col">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <i class="ph-fill ph-bell-ringing text-rose-500 text-xl"></i> Smart Alerts
+              </h3>
+              <span id="analisis-alert-status"
+                class="text-xs font-bold text-emerald-600 bg-emerald-50 dark:text-emerald-400 dark:bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-200 dark:border-emerald-500/20">Aman</span>
+            </div>
+            <div id="analisis-alert-content"
+              class="text-sm text-slate-600 dark:text-slate-300 flex-1 flex flex-col gap-3">
+              <div
+                class="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-dashed border-light-border dark:border-dark-border text-center text-slate-400">
+                Menghitung proyeksi tagihan...
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <!-- Health Chart (Burn Rate) -->
+          <div
+            class="lg:col-span-2 bg-white dark:bg-dark-surface border border-light-border dark:border-dark-border rounded-3xl p-6 shadow-sm flex flex-col">
+            <div class="flex items-center justify-between mb-6">
+              <div>
+                <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-1">Laju Pengeluaran vs Rekomendasi</h3>
+                <p class="text-xs text-slate-500">Akumulasi pengeluaran Anda dari awal bulan hingga hari ini.</p>
+              </div>
+              <div class="text-right">
+                <p class="text-xs text-slate-500 mb-1">Total Limit Ideal</p>
+                <p id="analisis-burn-limit" class="text-lg font-bold text-emerald-500">¥0</p>
+              </div>
+            </div>
+            <div class="w-full flex-1 min-h-[280px] relative">
+              <canvas id="burn-rate-chart" class="w-full h-full absolute inset-0"></canvas>
+            </div>
+          </div>
+
+          <!-- Forecasting -->
+          <div
+            class="lg:col-span-1 bg-white dark:bg-dark-surface border border-light-border dark:border-dark-border rounded-3xl p-6 shadow-sm overflow-hidden flex flex-col">
+            <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-1 flex items-center gap-2">
+              <i class="ph-fill ph-crystal-ball text-indigo-500 text-xl"></i> Prediksi Goals
+            </h3>
+            <p class="text-xs text-slate-500 mb-5">Estimasi waktu tercapai berdasarkan rata-rata tabungan bulanan
+              historis Anda.</p>
+            <div id="analisis-forecast-list" class="space-y-4 flex-1 overflow-y-auto custom-scrollbar pr-1">
+              <div class="p-3 text-center text-sm text-slate-500">Mengkalkulasi tren tabungan...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Dashboard View -->
       <div id="view-dashboard" class="view-section active animate-fade-in space-y-8">
         <!-- Overview Cards -->
@@ -518,7 +612,7 @@
                   <i id="toggle-balance-icon" class="ph ph-eye text-xl"></i>
                 </button>
               </div>
-              <h2 id="total-balance" class="text-4xl font-bold mb-4 tracking-tight" data-balance="0">Rp 0</h2>
+              <h2 id="total-balance" class="text-4xl font-bold mb-4 tracking-tight" data-balance="0">¥ 0</h2>
               <div
                 class="flex items-center justify-center gap-2 text-sm bg-white/20 w-8 h-8 rounded-full backdrop-blur-sm">
                 <i class="ph-fill ph-wallet text-lg"></i>
@@ -536,7 +630,7 @@
                     id="dashboard-income-pct"
                     class="ml-2 text-xs font-bold text-emerald-500 bg-emerald-50 dark:bg-emerald-500/10 px-2 py-0.5 rounded-full">+0%</span>
                 </p>
-                <h2 id="dashboard-income" class="text-2xl font-bold text-slate-900 dark:text-white">Rp 0</h2>
+                <h2 id="dashboard-income" class="text-2xl font-bold text-slate-900 dark:text-white">¥ 0</h2>
               </div>
               <div
                 class="w-12 h-12 rounded-lg bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center text-emerald-500 group-hover:scale-110 transition-transform duration-300">
@@ -558,7 +652,7 @@
                     id="dashboard-expense-pct"
                     class="ml-2 text-xs font-bold text-rose-500 bg-rose-50 dark:bg-rose-500/10 px-2 py-0.5 rounded-full">-0%</span>
                 </p>
-                <h2 id="dashboard-expense" class="text-2xl font-bold text-slate-900 dark:text-white">Rp 0</h2>
+                <h2 id="dashboard-expense" class="text-2xl font-bold text-slate-900 dark:text-white">¥ 0</h2>
               </div>
               <div
                 class="w-12 h-12 rounded-lg bg-rose-100 dark:bg-rose-500/20 flex items-center justify-center text-rose-500 group-hover:scale-110 transition-transform duration-300">
@@ -626,16 +720,16 @@
                   <div class="flex flex-wrap items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg w-fit">
                     <button id="tab-flow-weekly"
                       class="spending-flow-tab active px-3 py-1.5 text-xs font-semibold rounded-lg bg-white dark:bg-slate-700 shadow-sm text-slate-800 dark:text-white"
-                      data-period="weekly">Daily</button>
+                      data-period="weekly">Harian</button>
                     <button id="tab-flow-monthly"
                       class="spending-flow-tab px-3 py-1.5 text-xs font-semibold rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
-                      data-period="monthly">Weekly</button>
+                      data-period="monthly">Mingguan</button>
                     <button id="tab-flow-yearly"
                       class="spending-flow-tab px-3 py-1.5 text-xs font-semibold rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
-                      data-period="yearly">Monthly</button>
+                      data-period="yearly">Bulanan</button>
                     <button id="tab-flow-custom"
                       class="spending-flow-tab px-3 py-1.5 text-xs font-semibold rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
-                      data-period="custom">Custom</button>
+                      data-period="custom">Kustom</button>
                   </div>
                   <div id="spending-flow-custom-date" class="hidden mt-3 flex items-center gap-2">
                     <input type="date" id="flow-start-date"
@@ -668,19 +762,19 @@
                   class="flex flex-wrap items-center justify-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg w-full">
                   <button id="cat-tab-daily"
                     class="cat-flow-tab px-2 py-1.5 text-xs font-semibold rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors flex-1"
-                    data-period="daily">Daily</button>
+                    data-period="daily">Harian</button>
                   <button id="cat-tab-weekly"
                     class="cat-flow-tab px-2 py-1.5 text-xs font-semibold rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors flex-1"
-                    data-period="weekly">Weekly</button>
+                    data-period="weekly">Mingguan</button>
                   <button id="cat-tab-monthly"
                     class="cat-flow-tab active bg-white dark:bg-slate-700 shadow-sm text-slate-800 dark:text-white px-2 py-1.5 text-xs font-semibold rounded-lg flex-1 transition-colors"
-                    data-period="monthly">Monthly</button>
+                    data-period="monthly">Bulanan</button>
                   <button id="cat-tab-yearly"
                     class="cat-flow-tab px-2 py-1.5 text-xs font-semibold rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors flex-1"
-                    data-period="yearly">Yearly</button>
+                    data-period="yearly">Tahunan</button>
                   <button id="cat-tab-custom"
                     class="cat-flow-tab px-2 py-1.5 text-xs font-semibold rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors flex-1"
-                    data-period="custom">Custom</button>
+                    data-period="custom">Kustom</button>
                 </div>
                 <!-- Custom Date Range Picker for Category -->
                 <div id="cat-custom-date" class="hidden mt-1 flex items-center justify-center gap-2">
@@ -2568,7 +2662,37 @@
   <div id="mobile-overlay"
     class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-40 hidden opacity-0 transition-opacity duration-300"></div>
 
+  <!-- Custom Confirm Modal -->
+  <div id="custom-confirm-modal" class="fixed inset-0 z-[300] hidden flex items-center justify-center">
+    <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" id="confirm-backdrop"></div>
+    <div
+      class="relative z-10 bg-white dark:bg-dark-surface rounded-2xl shadow-2xl w-full max-w-sm mx-4 animate-fade-in overflow-hidden">
+      <div class="p-6 text-center">
+        <div
+          class="w-16 h-16 bg-rose-100 dark:bg-rose-500/20 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-4">
+          <i class="ph-fill ph-warning-circle text-4xl"></i>
+        </div>
+        <h3 class="text-xl font-bold text-slate-900 dark:text-white mb-2" id="confirm-title">Konfirmasi</h3>
+        <p class="text-slate-500 dark:text-slate-400 mb-6 leading-relaxed" id="confirm-message">Apakah Anda yakin?</p>
+        <div class="flex gap-3">
+          <button id="confirm-btn-cancel"
+            class="flex-1 py-3 rounded-lg border border-light-border dark:border-dark-border text-slate-700 dark:text-slate-300 font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">Batal</button>
+          <button id="confirm-btn-ok"
+            class="flex-1 py-3 rounded-lg bg-rose-500 hover:bg-rose-600 text-white font-semibold transition-colors shadow-lg shadow-rose-500/30">Ya,
+            Lanjutkan</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./service-worker.js')
+        .then(reg => console.log('KaneBuddy PWA: Service Worker terdaftar!', reg.scope))
+        .catch(err => console.warn('KaneBuddy PWA: Service Worker gagal:', err));
+    }
+  </script>
 </body>
 
 </html>

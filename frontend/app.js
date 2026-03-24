@@ -1,4 +1,41 @@
 // =====================================================================
+// UTILS & UI
+// =====================================================================
+window.escapeHtml = function (unsafe) {
+  if (typeof unsafe !== 'string') return unsafe;
+  return String(unsafe)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+};
+
+window.showCustomConfirm = function (message, onConfirm) {
+  const modal = document.getElementById('custom-confirm-modal');
+  const msgEl = document.getElementById('confirm-message');
+  const btnOk = document.getElementById('confirm-btn-ok');
+  const btnCancel = document.getElementById('confirm-btn-cancel');
+
+  if (!modal) {
+    if (window.confirm(message)) onConfirm();
+    return;
+  }
+
+  msgEl.textContent = message;
+  modal.classList.remove('hidden');
+
+  const hideModal = () => modal.classList.add('hidden');
+
+  btnCancel.onclick = hideModal;
+
+  btnOk.onclick = () => {
+    hideModal();
+    if (onConfirm) onConfirm();
+  };
+};
+
+// =====================================================================
 // USER AUTH
 // =====================================================================
 let users = JSON.parse(localStorage.getItem("budget_users")) || [];
@@ -126,11 +163,12 @@ function loginUser(user) {
 }
 
 function logout() {
-  if (!confirm("Yakin ingin keluar?")) return;
-  clearSession();
-  document.getElementById("auth-screen").classList.remove("hidden");
-  document.getElementById("form-login").reset();
-  showToast("Sampai jumpa!", "info");
+  showCustomConfirm("Yakin ingin keluar?", () => {
+    clearSession();
+    document.getElementById("auth-screen").classList.remove("hidden");
+    document.getElementById("form-login").reset();
+    showToast("Sampai jumpa!", "info");
+  });
 }
 
 function updateUserUI(user) {
@@ -529,7 +567,7 @@ function renderDashboardTransactions() {
                 <div class="w-12 h-12 rounded-lg bg-${c}-100 dark:bg-${c}-500/20 flex items-center justify-center text-${c}-500 group-hover:scale-110 transition-transform">
                     <i class="ph ${icons[tx.type]} text-xl"></i>
                 </div>
-                <div><h4 class="font-semibold text-slate-900 dark:text-white mb-0.5">${tx.title}</h4><p class="text-xs text-slate-500">${formatDate(tx.date)} • ${tx.category}</p></div>
+                <div><h4 class="font-semibold text-slate-900 dark:text-white mb-0.5">${escapeHtml(tx.title)}</h4><p class="text-xs text-slate-500">${formatDate(tx.date)} • ${escapeHtml(tx.category)}</p></div>
             </div>
             <p class="font-bold ${tx.type === "income" ? "text-emerald-500" : "text-slate-900 dark:text-white"}">${sign} ${formatCurrency(tx.amount)}</p>
         </div>`;
@@ -3030,11 +3068,10 @@ const API_URL = "http://localhost:3000/api/transactions";
 
 // 1. Fungsi MENGAMBIL data dari MySQL
 async function getTransactionsFromDB() {
+  if (!currentUser) return;
   try {
-    const response = await fetch(API_URL + "?t=" + new Date().getTime());
+    const response = await fetch(API_URL + "?user_id=" + currentUser.id + "&t=" + new Date().getTime());
     const dbTransactions = await response.json();
-
-    // Sesuaikan nama kolom DB (description) dengan yang dipakai UI (title)
     transactions = dbTransactions.map((tx) => ({
       id: tx.id,
       title: tx.description,
@@ -3043,12 +3080,8 @@ async function getTransactionsFromDB() {
       type: tx.type,
       date: tx.date,
     }));
-
-    saveAll(); // 👈 BARIS INI (Backup data terbaru ke memori browser)
-
+    saveAll();
     console.log("Data sukses diambil dari MySQL:", transactions);
-
-    // Render ulang semua tampilan UI agar data dari DB muncul
     updateDashboard();
     renderPemasukan();
     renderPengeluaran();
@@ -3059,29 +3092,21 @@ async function getTransactionsFromDB() {
 
 // 2. Fungsi MENYIMPAN data ke MySQL (Sudah dengan fitur Nominal & Silent)
 async function saveTransactionToDB(type, amount, category, date, description, isSilent = false) {
-  const newTransaction = { type, amount, category, date, description };
-
+  if (!currentUser) return;
+  const newTransaction = { user_id: currentUser.id, type, amount, category, date, description };
   try {
     const response = await fetch(API_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(newTransaction),
     });
-
     const result = await response.json();
-
-    if (!response.ok) {
-      showToast("Gagal: " + (result.error || "Server error"), "error");
-      return;
-    }
-
-    // Jika dipanggil dari form biasa (isSilent = false), tampilkan nominalnya
+    if (!response.ok) { showToast("Gagal: " + (result.error || "Server error"), "error"); return; }
     if (!isSilent) {
       let jenisTx = type === "income" ? "Pemasukan" : "Pengeluaran";
       showToast(`${jenisTx} ${formatCurrency(amount)} berhasil tersimpan!`);
     }
-
-    getTransactionsFromDB(); // Tarik data terbaru
+    getTransactionsFromDB();
   } catch (error) {
     showToast("Ups, gagal menyimpan data", "error");
   }
@@ -3104,107 +3129,75 @@ const BILLS_API = "http://localhost:3000/api/bills";
 
 // --- FUNGSI GOALS ---
 async function getGoalsFromDB() {
+  if (!currentUser) return;
   try {
-    const res = await fetch(GOALS_API + "?t=" + new Date().getTime());
+    const res = await fetch(GOALS_API + "?user_id=" + currentUser.id + "&t=" + new Date().getTime());
     const data = await res.json();
-    goals = data.map((g) => ({
-      id: g.id,
-      name: g.name,
-      target: Number(g.target),
-      saved: Number(g.saved),
-      deadline: g.deadline,
-      color: g.color,
-      icon: g.icon,
-    }));
-    saveAll(); // 👈 BARIS INI (Backup data terbaru ke memori browser)
+    goals = data.map((g) => ({ id: g.id, name: g.name, target: Number(g.target), saved: Number(g.saved), deadline: g.deadline, color: g.color, icon: g.icon }));
+    saveAll();
     renderGoals();
     renderDashboardGoals();
-  } catch (err) {
-    console.error(err);
-  }
+  } catch (err) { console.error(err); }
 }
 
 async function saveGoalToDB(name, target, saved, deadline, color, icon) {
+  if (!currentUser) return;
   try {
     await fetch(GOALS_API, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, target, saved, deadline, color, icon }),
+      body: JSON.stringify({ user_id: currentUser.id, name, target, saved, deadline, color, icon }),
     });
     getGoalsFromDB();
-  } catch (err) {
-    console.error(err);
-  }
+  } catch (err) { console.error(err); }
 }
 
 // Menimpa fungsi deleteGoal lama
 async function deleteGoal(id) {
   if (!confirm("Yakin hapus goal ini dari database?")) return;
+  if (!currentUser) return;
   try {
-    await fetch(`${GOALS_API}/${id}`, { method: "DELETE" });
+    await fetch(`${GOALS_API}/${id}?user_id=${currentUser.id}`, { method: "DELETE" });
     showToast("Goal dihapus");
     getGoalsFromDB();
-  } catch (err) {
-    console.error(err);
-  }
+  } catch (err) { console.error(err); }
 }
 
 // --- FUNGSI BILLS ---
 async function getBillsFromDB() {
+  if (!currentUser) return;
   try {
-    const res = await fetch(BILLS_API + "?t=" + new Date().getTime());
+    const res = await fetch(BILLS_API + "?user_id=" + currentUser.id + "&t=" + new Date().getTime());
     const data = await res.json();
-    bills = data.map((b) => ({
-      id: b.id,
-      name: b.name,
-      amount: Number(b.amount),
-      dueDate: b.due_date,
-      category: b.category,
-      paid: b.paid === 1 || b.paid === true,
-      paidDate: b.paid_date,
-    }));
-
-    saveAll(); // 👈 BARIS INI (Backup data terbaru ke memori browser)
-
+    bills = data.map((b) => ({ id: b.id, name: b.name, amount: Number(b.amount), dueDate: b.due_date, category: b.category, paid: b.paid === 1 || b.paid === true, paidDate: b.paid_date }));
+    saveAll();
     renderBills();
     renderDashboardBills();
-  } catch (err) {
-    console.error(err);
-  }
+  } catch (err) { console.error(err); }
 }
 
 async function saveBillToDB(name, amount, due_date, category, paid) {
+  if (!currentUser) return;
   try {
     const response = await fetch(BILLS_API, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, amount, due_date, category, paid }),
+      body: JSON.stringify({ user_id: currentUser.id, name, amount, due_date, category, paid }),
     });
-
     const result = await response.json();
-
-    // Hentikan proses jika ditolak oleh MySQL
-    if (!response.ok) {
-      console.error("🚨 Ditolak oleh MySQL:", result.error);
-      showToast("Gagal: Tanggal wajib diisi!", "error");
-      return;
-    }
-
+    if (!response.ok) { console.error("Ditolak MySQL:", result.error); showToast("Gagal: Tanggal wajib diisi!", "error"); return; }
     getBillsFromDB();
-  } catch (err) {
-    console.error("🚨 Error Fetch:", err);
-  }
+  } catch (err) { console.error("Error Fetch:", err); }
 }
 // Menimpa fungsi deleteBill lama
 async function deleteBill(id) {
   if (!confirm("Yakin hapus tagihan ini dari database?")) return;
+  if (!currentUser) return;
   try {
-    await fetch(`${BILLS_API}/${id}`, { method: "DELETE" });
+    await fetch(`${BILLS_API}/${id}?user_id=${currentUser.id}`, { method: "DELETE" });
     showToast("Tagihan dihapus");
     getBillsFromDB();
-  } catch (err) {
-    console.error(err);
-  }
+  } catch (err) { console.error(err); }
 }
 
 // ==========================================
@@ -3214,72 +3207,40 @@ const SHIFTS_API = "http://localhost:3000/api/shifts";
 
 // 1. Ambil data Shift dari Database
 async function getShiftsFromDB() {
+  if (!currentUser) return;
   try {
-    const res = await fetch(SHIFTS_API + "?t=" + new Date().getTime());
+    const res = await fetch(SHIFTS_API + "?user_id=" + currentUser.id + "&t=" + new Date().getTime());
     const data = await res.json();
-
-    // Sesuaikan format snake_case dari DB ke camelCase untuk UI
-    shifts = data.map((s) => ({
-      id: s.id,
-      date: s.date.split("T")[0], // Ambil format YYYY-MM-DD
-      type: s.type,
-      startTime: s.start_time,
-      endTime: s.end_time,
-      hours: Number(s.hours),
-      normalHoursWorked: Number(s.normal_hours),
-      overtimeHours: Number(s.overtime_hours),
-      hourlyRate: Number(s.hourly_rate),
-      earnings: Number(s.earnings),
-      recorded: s.recorded === 1 || s.recorded === true,
-    }));
-
-    saveAll(); // 👈 BARIS INI (Backup data terbaru ke memori browser)
-
+    shifts = data.map((s) => ({ id: s.id, date: s.date.split("T")[0], type: s.type, startTime: s.start_time, endTime: s.end_time, hours: Number(s.hours), normalHoursWorked: Number(s.normal_hours), overtimeHours: Number(s.overtime_hours), hourlyRate: Number(s.hourly_rate), earnings: Number(s.earnings), recorded: s.recorded === 1 || s.recorded === true }));
+    saveAll();
     renderShifts();
     renderOvertimeCard();
-  } catch (err) {
-    console.error("Gagal load shifts:", err);
-  }
+  } catch (err) { console.error("Gagal load shifts:", err); }
 }
 
 // 2. Simpan Shift ke Database
 async function saveShiftToDB(shiftData) {
+  if (!currentUser) return;
   try {
     const response = await fetch(SHIFTS_API, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        date: shiftData.date,
-        type: shiftData.type,
-        start_time: shiftData.startTime,
-        end_time: shiftData.endTime,
-        hours: shiftData.hours,
-        normal_hours: shiftData.normalHoursWorked,
-        overtime_hours: shiftData.overtimeHours,
-        hourly_rate: shiftData.hourlyRate,
-        earnings: shiftData.earnings,
-      }),
+      body: JSON.stringify({ user_id: currentUser.id, date: shiftData.date, type: shiftData.type, start_time: shiftData.startTime, end_time: shiftData.endTime, hours: shiftData.hours, normal_hours: shiftData.normalHoursWorked, overtime_hours: shiftData.overtimeHours, hourly_rate: shiftData.hourlyRate, earnings: shiftData.earnings }),
     });
-
     if (!response.ok) throw new Error("Gagal menyimpan shift");
-
-    getShiftsFromDB(); // Update UI
-  } catch (err) {
-    console.error("Error save shift:", err);
-  }
+    getShiftsFromDB();
+  } catch (err) { console.error("Error save shift:", err); }
 }
 
 // 3. Menimpa fungsi deleteShift lama
 async function deleteShift(id) {
   if (!confirm("Yakin hapus shift ini dari database?")) return;
+  if (!currentUser) return;
   try {
-    await fetch(`${SHIFTS_API}/${id}`, { method: "DELETE" });
+    await fetch(`${SHIFTS_API}/${id}?user_id=${currentUser.id}`, { method: "DELETE" });
     showToast("Shift dihapus");
     getShiftsFromDB();
-  } catch (err) {
-    console.error(err);
-    showToast("Gagal menghapus shift", "error");
-  }
+  } catch (err) { console.error(err); showToast("Gagal menghapus shift", "error"); }
 }
 
 // ==========================================
@@ -3289,54 +3250,34 @@ const TASKS_API = "http://localhost:3000/api/tasks";
 
 // 1. Ambil data Task dari Database
 async function getTasksFromDB() {
+  if (!currentUser) return;
   try {
-    const res = await fetch(TASKS_API + "?t=" + new Date().getTime());
+    const res = await fetch(TASKS_API + "?user_id=" + currentUser.id + "&t=" + new Date().getTime());
     const data = await res.json();
-
-    tasks = data.map((t) => ({
-      id: t.id,
-      title: t.title,
-      status: t.status,
-      dueDate: t.due_date || t.dueDate || null,
-      priority: t.priority || 'medium',
-      tag: t.tag || 'Lainnya',
-      subtasks: (typeof t.subtasks === 'string' ? JSON.parse(t.subtasks || '[]') : t.subtasks) || []
-    }));
-
+    tasks = data.map((t) => ({ id: t.id, title: t.title, status: t.status, dueDate: t.due_date || t.dueDate || null, priority: t.priority || 'medium', tag: t.tag || 'Lainnya', subtasks: (typeof t.subtasks === 'string' ? JSON.parse(t.subtasks || '[]') : t.subtasks) || [] }));
     saveAll();
     renderTasks();
-  } catch (err) {
-    console.error("Gagal load tasks:", err);
-  }
+  } catch (err) { console.error("Gagal load tasks:", err); }
 }
 
 // 2. Simpan Task Baru ke Database
-window.saveTaskToDB = async function (title, dueDate, priority, tag) { // 👈 TERIMA TAG
+window.saveTaskToDB = async function (title, dueDate, priority, tag) {
+  if (!currentUser) return;
   const finalDueDate = dueDate ? dueDate : null;
-  const newTask = {
-    id: 'task-' + Date.now(),
-    title,
-    status: 'pending',
-    dueDate: finalDueDate,
-    priority: priority || 'medium',
-    tag: tag || 'Lainnya' // 👈 SIMPAN TAG LOKAL
-  };
+  const newTask = { id: 'task-' + Date.now(), title, status: 'pending', dueDate: finalDueDate, priority: priority || 'medium', tag: tag || 'Lainnya' };
   tasks.push(newTask);
   saveAll();
   renderTasks();
   if (typeof renderDashboardTasks === 'function') renderDashboardTasks();
-
   try {
     const response = await fetch(TASKS_API, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, status: 'pending', due_date: finalDueDate, priority, tag }), // 👈 KIRIM TAG KE SERVER
+      body: JSON.stringify({ user_id: currentUser.id, title, status: 'pending', due_date: finalDueDate, priority, tag }),
     });
     if (!response.ok) throw new Error("Gagal menyimpan task ke server");
     getTasksFromDB();
-  } catch (err) {
-    console.warn("Server MySQL offline, task disimpan lokal.", err);
-  }
+  } catch (err) { console.warn("Server MySQL offline, task disimpan lokal.", err); }
 };
 
 // 3. Update Status Task
@@ -3366,20 +3307,15 @@ window.updateTaskStatus = async function (id, newStatus) {
 // 4. Hapus Task
 window.deleteTask = async function (id) {
   if (!confirm("Yakin ingin menghapus task ini?")) return;
-
-  // A. Hapus dari layar seketika
+  if (!currentUser) return;
   tasks = tasks.filter((t) => String(t.id) !== String(id));
   saveAll();
   renderTasks();
   if (typeof renderDashboardTasks === 'function') renderDashboardTasks();
   showToast("Task dihapus");
-
-  // B. Hapus dari server
   try {
-    await fetch(`${TASKS_API}/${id}`, { method: "DELETE" });
-  } catch (err) {
-    console.error(err);
-  }
+    await fetch(`${TASKS_API}/${id}?user_id=${currentUser.id}`, { method: "DELETE" });
+  } catch (err) { console.error(err); }
 };
 
 // ==========================================
@@ -3409,13 +3345,12 @@ function bukaHalaman(viewId) {
 
 // 1. Ambil Data dari Database
 async function getRemittancesFromDB() {
+  if (!currentUser) return;
   try {
-    const response = await fetch(REMITTANCE_API + "?t=" + new Date().getTime());
+    const response = await fetch(REMITTANCE_API + "?user_id=" + currentUser.id + "&t=" + new Date().getTime());
     remittances = await response.json();
     renderRemittanceHistory();
-  } catch (err) {
-    console.error("Gagal load remittance:", err);
-  }
+  } catch (err) { console.error("Gagal load remittance:", err); }
 }
 
 // 2. Kalkulator Rupiah Otomatis (Yen * Kurs)
@@ -3449,7 +3384,7 @@ if (formRemittance) {
       const response = await fetch(REMITTANCE_API, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date, amount_jpy, exchange_rate, amount_idr, provider, notes }),
+        body: JSON.stringify({ user_id: currentUser ? currentUser.id : null, date, amount_jpy, exchange_rate, amount_idr, provider, notes }),
       });
       if (!response.ok) throw new Error("Gagal simpan");
 
@@ -3514,15 +3449,11 @@ function renderRemittanceHistory() {
 // 5. Hapus Data
 async function hapusRemittance(id) {
   if (!confirm("Hapus catatan kiriman ini?")) return;
+  if (!currentUser) return;
   try {
-    const response = await fetch(`${REMITTANCE_API}/${id}`, { method: "DELETE" });
-    if (response.ok) {
-      showToast("Catatan terhapus!");
-      getRemittancesFromDB();
-    }
-  } catch (err) {
-    showToast("Gagal menghapus data", "error");
-  }
+    const response = await fetch(`${REMITTANCE_API}/${id}?user_id=${currentUser.id}`, { method: "DELETE" });
+    if (response.ok) { showToast("Catatan terhapus!"); getRemittancesFromDB(); }
+  } catch (err) { showToast("Gagal menghapus data", "error"); }
 }
 
 // Set tanggal default saat aplikasi dimuat
@@ -3539,13 +3470,12 @@ let documentsData = [];
 
 // 1. Ambil Data dari Database
 async function getDocumentsFromDB() {
+  if (!currentUser) return;
   try {
-    const response = await fetch(DOCUMENTS_API + "?t=" + new Date().getTime());
+    const response = await fetch(DOCUMENTS_API + "?user_id=" + currentUser.id + "&t=" + new Date().getTime());
     documentsData = await response.json();
     renderDocuments();
-  } catch (err) {
-    console.error("Gagal load dokumen:", err);
-  }
+  } catch (err) { console.error("Gagal load dokumen:", err); }
 }
 
 // 2. Simpan Data Baru
@@ -3562,7 +3492,7 @@ if (formDocument) {
       const response = await fetch(DOCUMENTS_API, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, type, expiry_date, notes }),
+        body: JSON.stringify({ user_id: currentUser ? currentUser.id : null, title, type, expiry_date, notes }),
       });
       if (!response.ok) throw new Error("Gagal simpan");
 
@@ -3652,15 +3582,11 @@ function renderDocuments() {
 // 4. Hapus Dokumen
 async function hapusDocument(id) {
   if (!confirm("Hapus alarm dokumen ini?")) return;
+  if (!currentUser) return;
   try {
-    const response = await fetch(`${DOCUMENTS_API}/${id}`, { method: "DELETE" });
-    if (response.ok) {
-      showToast("Alarm dihapus!");
-      getDocumentsFromDB();
-    }
-  } catch (err) {
-    showToast("Gagal menghapus data", "error");
-  }
+    const response = await fetch(`${DOCUMENTS_API}/${id}?user_id=${currentUser.id}`, { method: "DELETE" });
+    if (response.ok) { showToast("Alarm dihapus!"); getDocumentsFromDB(); }
+  } catch (err) { showToast("Gagal menghapus data", "error"); }
 }
 
 // ==========================================
@@ -3671,13 +3597,12 @@ let nenkinData = [];
 
 // 1. Ambil Data
 async function getNenkinFromDB() {
+  if (!currentUser) return;
   try {
-    const response = await fetch(NENKIN_API + "?t=" + new Date().getTime());
+    const response = await fetch(NENKIN_API + "?user_id=" + currentUser.id + "&t=" + new Date().getTime());
     nenkinData = await response.json();
     renderNenkinHistory();
-  } catch (err) {
-    console.error(err);
-  }
+  } catch (err) { console.error(err); }
 }
 
 // 2. Kalkulator Pintar (Sesuai Aturan JHT Jepang)
@@ -4607,15 +4532,187 @@ window.openCategoryModal = window.showCategoryModal;
 // 🚀 LAZY LOADING & SKELETON
 // ==========================================
 
+// ==========================================
+// 📈 ANALISIS & WAWASAN (INSIGHTS)
+// ==========================================
+function renderAnalisis() {
+  const today = new Date();
+  const m = today.getMonth();
+  const y = today.getFullYear();
+
+  // 1. AI Insight Calculation
+  const expsThisMonth = transactions.filter(t => t.type === 'expense' && new Date(t.date).getMonth() === m && new Date(t.date).getFullYear() === y);
+  const aiTextEl = document.getElementById("analisis-ai-text");
+  if (aiTextEl) {
+    if (expsThisMonth.length === 0) {
+      aiTextEl.innerHTML = `<p class="text-slate-600 dark:text-slate-300">Belum ada data pengeluaran bulan ini. Yuk mulai catat pengeluaranmu!</p>`;
+    } else {
+      const grouped = expsThisMonth.reduce((acc, t) => {
+        acc[t.category] = (acc[t.category] || 0) + t.amount;
+        return acc;
+      }, {});
+      let topCategory = Object.keys(grouped).reduce((a, b) => grouped[a] > grouped[b] ? a : b);
+      let topAmount = grouped[topCategory];
+      aiTextEl.innerHTML = `<p class="text-slate-600 dark:text-slate-300">
+        Pengeluaran terbesarmu bulan ini ada di kategori <strong>${escapeHtml(topCategory)}</strong> sebesar <strong>${formatCurrency(topAmount)}</strong>. 
+        Mungkin saatnya menekan pengeluaran di sektor ini agar tabunganmu lebih sehat!
+      </p>`;
+    }
+  }
+
+  // 2. Smart Alerts Calculation
+  const currentBalance = transactions.reduce((acc, t) => t.type === 'income' ? acc + t.amount : acc - t.amount, 0);
+  const unpaidBills = bills.filter(b => !b.paid).reduce((acc, b) => acc + b.amount, 0);
+  const alertStatusEl = document.getElementById("analisis-alert-status");
+  const alertContentEl = document.getElementById("analisis-alert-content");
+
+  if (alertStatusEl && alertContentEl) {
+    if (unpaidBills > currentBalance) {
+      alertStatusEl.className = "text-xs font-bold text-rose-600 bg-rose-50 dark:text-rose-400 dark:bg-rose-500/10 px-3 py-1 rounded-full border border-rose-200 dark:border-rose-500/20";
+      alertStatusEl.textContent = "Bahaya";
+      alertContentEl.innerHTML = `<div class="p-3 bg-rose-50 dark:bg-rose-500/10 rounded-xl border border-rose-200 dark:border-rose-500/20 text-rose-600 dark:text-rose-400">
+        Total tagihan belum dibayar (<strong>${formatCurrency(unpaidBills)}</strong>) melebihi saldo saat ini (<strong>${formatCurrency(currentBalance)}</strong>). Segera tambah pemasukan atau kurangi pengeluaran!
+      </div>`;
+    } else if (unpaidBills > 0) {
+      alertStatusEl.className = "text-xs font-bold text-amber-600 bg-amber-50 dark:text-amber-400 dark:bg-amber-500/10 px-3 py-1 rounded-full border border-amber-200 dark:border-amber-500/20";
+      alertStatusEl.textContent = "Waspada";
+      alertContentEl.innerHTML = `<div class="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-dashed border-light-border dark:border-dark-border text-slate-600 dark:text-slate-300">
+        Saldo Anda cukup untuk menutupi sisa tagihan (<strong>${formatCurrency(unpaidBills)}</strong>). Jangan lupa membayarnya tepat waktu!
+      </div>`;
+    } else {
+      alertStatusEl.className = "text-xs font-bold text-emerald-600 bg-emerald-50 dark:text-emerald-400 dark:bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-200 dark:border-emerald-500/20";
+      alertStatusEl.textContent = "Aman";
+      alertContentEl.innerHTML = `<div class="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-dashed border-light-border dark:border-dark-border text-slate-600 dark:text-slate-300">
+        Tidak ada tagihan yang tertunggak. Keputusan finansial yang sangat baik!
+      </div>`;
+    }
+  }
+
+  // 3. Forecasting (Prediksi Goals)
+  const forecastListEl = document.getElementById("analisis-forecast-list");
+  if (forecastListEl) {
+    const mInc = transactions.filter(t => t.type === 'income' && new Date(t.date).getMonth() === m && new Date(t.date).getFullYear() === y).reduce((s, t) => s + t.amount, 0);
+    const mExp = transactions.filter(t => t.type === 'expense' && new Date(t.date).getMonth() === m && new Date(t.date).getFullYear() === y).reduce((s, t) => s + t.amount, 0);
+    const avgSavings = (mInc - mExp) > 0 ? (mInc - mExp) : 0;
+
+    if (goals.length === 0) {
+      forecastListEl.innerHTML = `<div class="p-3 text-center text-sm text-slate-500 border border-dashed border-slate-200 dark:border-slate-700 rounded-lg">Belum ada data Goals. Manfaatkan fitur Goals untuk mulai menabung!</div>`;
+    } else if (avgSavings <= 0) {
+      forecastListEl.innerHTML = `<div class="p-3 bg-rose-50 dark:bg-rose-500/10 text-rose-500 text-sm rounded-lg">Tabungan bulanan Anda negatif/nol bulan ini. Tidak dapat memprediksi waktu pencapaian target.</div>`;
+    } else {
+      forecastListEl.innerHTML = goals.map(g => {
+        const sisaHitung = g.target - g.saved;
+        if (sisaHitung <= 0) return `<div class="p-3 bg-emerald-50 dark:bg-emerald-500/10 rounded-lg mb-2 text-sm"><span class="font-bold text-emerald-600 dark:text-emerald-400">${escapeHtml(g.name)}</span>: Sudah tercapai! 🎉</div>`;
+        const mos = Math.ceil(sisaHitung / avgSavings);
+        return `
+          <div class="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-xl mb-3 border border-light-border dark:border-dark-border">
+             <div>
+                <p class="font-bold text-slate-900 dark:text-white text-sm">${escapeHtml(g.name)}</p>
+                <p class="text-xs text-slate-500">Kekurangan: ${formatCurrency(sisaHitung)}</p>
+             </div>
+             <div class="text-right">
+                <p class="text-xs font-bold text-indigo-500">Estimasi</p>
+                <p class="text-sm font-bold text-slate-900 dark:text-white">${mos} Bulan</p>
+             </div>
+          </div>
+        `;
+      }).join('');
+    }
+  }
+
+  // 4. Burn Rate Chart
+  renderBurnRateChart();
+}
+
+let burnRateChartInstance = null;
+function renderBurnRateChart() {
+  const canvas = document.getElementById("burn-rate-chart");
+  if (!canvas || typeof Chart === "undefined") return;
+
+  const today = new Date();
+  const m = today.getMonth();
+  const y = today.getFullYear();
+  const daysInMonth = new Date(y, m + 1, 0).getDate();
+  const currentDay = today.getDate();
+
+  const labels = Array.from({ length: currentDay }, (_, i) => i + 1);
+  const data = [];
+  let accum = 0;
+
+  for (let i = 1; i <= currentDay; i++) {
+    const dayStr = `${y}-${String(m + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+    const dailyExp = transactions
+      .filter(t => t.type === 'expense' && t.date && t.date.startsWith(dayStr))
+      .reduce((s, t) => s + t.amount, 0);
+    accum += dailyExp;
+    data.push(accum);
+  }
+
+  const mInc = transactions.filter(t => t.type === 'income' && new Date(t.date).getMonth() === m && new Date(t.date).getFullYear() === y).reduce((s, t) => s + t.amount, 0);
+  const limitValue = mInc > 0 ? mInc : (accum > 0 ? accum * 1.5 : 50000);
+  const idealRate = Array.from({ length: currentDay }, (_, i) => (limitValue / daysInMonth) * (i + 1));
+
+  const limitEl = document.getElementById("analisis-burn-limit");
+  if (limitEl) limitEl.textContent = formatCurrency(mInc);
+
+  if (burnRateChartInstance) {
+    burnRateChartInstance.data.labels = labels;
+    burnRateChartInstance.data.datasets[0].data = data;
+    burnRateChartInstance.data.datasets[1].data = idealRate;
+    burnRateChartInstance.update();
+  } else {
+    burnRateChartInstance = new Chart(canvas, {
+      type: "line",
+      data: {
+        labels,
+        datasets: [
+          {
+            label: "Total Pengeluaran",
+            data,
+            borderColor: "#f43f5e",
+            backgroundColor: "rgba(244, 63, 94, 0.1)",
+            fill: true,
+            tension: 0.4
+          },
+          {
+            label: "Limit Pemasukan Ideal",
+            data: idealRate,
+            borderColor: "#10b981",
+            borderDash: [5, 5],
+            fill: false,
+            tension: 0
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: true, position: 'bottom' },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => " " + formatCurrency(ctx.raw),
+            }
+          }
+        },
+        scales: {
+          y: { beginAtZero: true },
+        }
+      }
+    });
+  }
+}
+
 // Fungsi pembantu untuk Lazy Loading
 window.handleLazyRender = function (view) {
   const containerId = getViewContainerId(view);
-  if (!containerId) return;
 
   // Tampilkan Skeleton jika data belum ada
-  const container = document.getElementById(containerId);
-  if (container && container.innerHTML.trim() === "") {
-    showSkeleton(container);
+  if (containerId) {
+    const container = document.getElementById(containerId);
+    if (container && container.innerHTML.trim() === "") {
+      showSkeleton(container);
+    }
   }
 
   // Delay tipis untuk efek transisi yang mulus
@@ -4628,28 +4725,30 @@ window.handleLazyRender = function (view) {
       case 'bills': if (typeof renderBills === 'function') renderBills(); break;
       case 'shifts': if (typeof renderShifts === 'function') renderShifts(); break;
       case 'aset': if (typeof renderAssets === 'function') renderAssets(); break;
+      case 'analisis': if (typeof renderAnalisis === 'function') renderAnalisis(); break;
     }
   }, 150);
 }
 
 window.showSkeleton = function (container) {
   container.innerHTML = `
-    <div class="space-y-4 w-full">
+      < div class="space-y-4 w-full p-4" >
       <div class="skeleton h-24 w-full rounded-2xl"></div>
       <div class="skeleton h-24 w-full rounded-2xl"></div>
       <div class="skeleton h-24 w-full rounded-2xl"></div>
-    </div>`;
+    </div > `;
 }
 
 window.getViewContainerId = function (view) {
   const map = {
     'pemasukan': 'pemasukan-history',
     'pengeluaran': 'pengeluaran-history',
-    'task': 'task-list', // atau task-board
+    'task': 'task-list',
     'goals': 'goals-list',
     'bills': 'bills-list',
     'shifts': 'shifts-list',
-    'aset': 'asset-list'
+    'aset': 'asset-list',
+    'analisis': null
   };
   return map[view];
 }
