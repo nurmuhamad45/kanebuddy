@@ -29,6 +29,7 @@ SET time_zone = "+00:00";
 
 CREATE TABLE `bills` (
   `id` int(11) NOT NULL,
+  `user_id` varchar(50) NOT NULL,
   `name` varchar(255) NOT NULL,
   `amount` decimal(15,2) NOT NULL,
   `due_date` date NOT NULL,
@@ -52,6 +53,7 @@ INSERT INTO `bills` (`id`, `name`, `amount`, `due_date`, `category`, `paid`, `pa
 
 CREATE TABLE `documents` (
   `id` int(11) NOT NULL,
+  `user_id` varchar(50) NOT NULL,
   `title` varchar(100) NOT NULL,
   `type` varchar(50) NOT NULL,
   `expiry_date` date NOT NULL,
@@ -76,6 +78,7 @@ INSERT INTO `documents` (`id`, `title`, `type`, `expiry_date`, `notes`) VALUES
 
 CREATE TABLE `goals` (
   `id` int(11) NOT NULL,
+  `user_id` varchar(50) NOT NULL,
   `name` varchar(255) NOT NULL,
   `target` decimal(15,2) NOT NULL,
   `saved` decimal(15,2) DEFAULT 0.00,
@@ -102,6 +105,7 @@ INSERT INTO `goals` (`id`, `name`, `target`, `saved`, `deadline`, `color`, `icon
 
 CREATE TABLE `nenkin` (
   `id` int(11) NOT NULL,
+  `user_id` varchar(50) NOT NULL,
   `date` date NOT NULL,
   `avg_salary` decimal(15,2) NOT NULL,
   `months` int(11) NOT NULL,
@@ -124,6 +128,7 @@ INSERT INTO `nenkin` (`id`, `date`, `avg_salary`, `months`, `estimated_amount`, 
 
 CREATE TABLE `remittances` (
   `id` int(11) NOT NULL,
+  `user_id` varchar(50) NOT NULL,
   `date` date NOT NULL,
   `amount_jpy` decimal(15,2) NOT NULL,
   `exchange_rate` decimal(10,2) NOT NULL,
@@ -147,6 +152,7 @@ INSERT INTO `remittances` (`id`, `date`, `amount_jpy`, `exchange_rate`, `amount_
 
 CREATE TABLE `shifts` (
   `id` int(11) NOT NULL,
+  `user_id` varchar(50) NOT NULL,
   `date` date NOT NULL,
   `type` varchar(50) DEFAULT NULL,
   `start_time` varchar(20) DEFAULT NULL,
@@ -191,6 +197,7 @@ INSERT INTO `shifts` (`id`, `date`, `type`, `start_time`, `end_time`, `hours`, `
 
 CREATE TABLE `tasks` (
   `id` int(11) NOT NULL,
+  `user_id` varchar(50) NOT NULL,
   `title` varchar(255) NOT NULL,
   `status` varchar(50) DEFAULT 'pending',
   `due_date` date DEFAULT NULL,
@@ -211,11 +218,58 @@ INSERT INTO `tasks` (`id`, `title`, `status`, `due_date`, `priority`, `tag`) VAL
 -- --------------------------------------------------------
 
 --
--- Table structure for table `transactions`
+-- Table structure for table `assets`
 --
+
+CREATE TABLE `assets` (
+  `id` int(11) NOT NULL,
+  `user_id` varchar(50) NOT NULL,
+  `name` varchar(255) NOT NULL,
+  `type` varchar(100) NOT NULL,
+  `value` decimal(15,2) NOT NULL,
+  `purchase_date` date DEFAULT NULL,
+  `notes` text DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `budgets`
+--
+
+CREATE TABLE `budgets` (
+  `id` int(11) NOT NULL,
+  `user_id` varchar(50) NOT NULL,
+  `category` varchar(100) NOT NULL,
+  `amount` decimal(15,2) NOT NULL,
+  `month` varchar(20) NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `debts`
+--
+
+CREATE TABLE `debts` (
+  `id` int(11) NOT NULL,
+  `user_id` varchar(50) NOT NULL,
+  `type` varchar(50) NOT NULL,
+  `name` varchar(255) NOT NULL,
+  `amount` decimal(15,2) NOT NULL,
+  `date` date NOT NULL,
+  `due_date` date DEFAULT NULL,
+  `notes` text DEFAULT NULL,
+  `paid` tinyint(1) DEFAULT 0,
+  `paid_amount` decimal(15,2) DEFAULT 0.00,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE `transactions` (
   `id` int(11) NOT NULL,
+  `user_id` varchar(50) NOT NULL,
   `type` varchar(50) NOT NULL,
   `amount` decimal(15,2) NOT NULL,
   `category` varchar(100) NOT NULL,
@@ -276,56 +330,78 @@ INSERT INTO `users` (`id`, `name`, `email`, `password`, `photo`) VALUES
 -- Indexes for table `bills`
 --
 ALTER TABLE `bills`
-  ADD PRIMARY KEY (`id`);
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `user_id` (`user_id`);
 
 --
 -- Indexes for table `documents`
 --
 ALTER TABLE `documents`
-  ADD PRIMARY KEY (`id`);
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `user_id` (`user_id`);
 
 --
 -- Indexes for table `goals`
 --
 ALTER TABLE `goals`
-  ADD PRIMARY KEY (`id`);
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `user_id` (`user_id`);
 
 --
 -- Indexes for table `nenkin`
 --
 ALTER TABLE `nenkin`
-  ADD PRIMARY KEY (`id`);
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `user_id` (`user_id`);
 
 --
 -- Indexes for table `remittances`
 --
 ALTER TABLE `remittances`
-  ADD PRIMARY KEY (`id`);
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `user_id` (`user_id`);
 
 --
 -- Indexes for table `shifts`
 --
 ALTER TABLE `shifts`
-  ADD PRIMARY KEY (`id`);
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `user_id` (`user_id`);
 
 --
 -- Indexes for table `tasks`
 --
 ALTER TABLE `tasks`
-  ADD PRIMARY KEY (`id`);
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `user_id` (`user_id`);
 
 --
 -- Indexes for table `transactions`
 --
 ALTER TABLE `transactions`
-  ADD PRIMARY KEY (`id`);
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `user_id` (`user_id`);
 
 --
--- Indexes for table `users`
+-- Indexes for table `assets`
 --
-ALTER TABLE `users`
+ALTER TABLE `assets`
   ADD PRIMARY KEY (`id`),
-  ADD UNIQUE KEY `email` (`email`);
+  ADD KEY `user_id` (`user_id`);
+
+--
+-- Indexes for table `budgets`
+--
+ALTER TABLE `budgets`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `user_id` (`user_id`);
+
+--
+-- Indexes for table `debts`
+--
+ALTER TABLE `debts`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `user_id` (`user_id`);
 
 --
 -- AUTO_INCREMENT for dumped tables
@@ -374,10 +450,22 @@ ALTER TABLE `tasks`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
 
 --
--- AUTO_INCREMENT for table `transactions`
+-- AUTO_INCREMENT for table `assets`
 --
-ALTER TABLE `transactions`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=32;
+ALTER TABLE `assets`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `budgets`
+--
+ALTER TABLE `budgets`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `debts`
+--
+ALTER TABLE `debts`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;

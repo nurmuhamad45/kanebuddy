@@ -80,7 +80,7 @@
     }
 
     body {
-      font-family: "Google Sans", "Open Sans", sans-serif;
+      font-family: "Google Sans", "Open Sans", sans-serif !important;
     }
 
     /* Animasi Skeleton Loading */
@@ -112,6 +112,29 @@
       background: #1e293b;
       background-image: linear-gradient(to right, #1e293b 0%, #334155 20%, #1e293b 40%, #1e293b 100%);
     }
+
+    /* Crop Modal Styles */
+    #crop-overlay {
+      background: rgba(0, 0, 0, 0.4);
+    }
+
+    #crop-selection {
+      box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.8), inset 0 0 0 1px rgba(255, 255, 255, 0.4);
+      cursor: move;
+    }
+
+    #crop-selection::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 20px;
+      height: 20px;
+      margin: -10px 0 0 -10px;
+      border: 2px solid rgba(255, 255, 255, 0.8);
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.2);
+    }
   </style>
   <!-- Phosphor Icons -->
   <script src="https://unpkg.com/@phosphor-icons/web"></script>
@@ -128,157 +151,276 @@
   class="bg-light-bg dark:bg-dark-bg text-slate-800 dark:text-slate-200 transition-colors duration-300 antialiased overflow-hidden flex h-screen">
 
   <!-- ===== AUTH SCREEN ===== -->
-  <div id="auth-screen" class="fixed inset-0 z-[200] flex bg-white dark:bg-slate-900 overflow-hidden animate-fade-in">
-    <!-- Left: Branding & Graphic (Hidden on mobile) -->
-    <div class="hidden lg:flex lg:w-1/2 relative flex-col justify-between p-12 bg-slate-900 border-r border-slate-800">
-      <!-- Background Image with Overlay -->
-      <div class="absolute inset-0 z-0">
-        <img src="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2564&auto=format&fit=crop"
-          class="w-full h-full object-cover opacity-40 mix-blend-screen" alt="Abstract gradient" />
-        <div class="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent"></div>
-      </div>
+  <div id="auth-screen" class="fixed inset-0 z-[200] flex overflow-hidden">
 
-      <div class="relative z-10 flex items-center gap-3">
+    <!-- ── LEFT PANEL: Branding ── -->
+    <div class="hidden lg:flex relative w-[55%] flex-col justify-between overflow-hidden"
+      style="background: linear-gradient(135deg, #0f172a 0%, #1a0a2e 40%, #0d1f3c 100%);">
+
+      <!-- Animated radial glow blobs -->
+      <div class="absolute inset-0 pointer-events-none">
+        <div class="absolute -top-32 -left-32 w-[500px] h-[500px] rounded-full opacity-25"
+          style="background:radial-gradient(circle, #f97316 0%, transparent 70%); animation: floatBlob1 8s ease-in-out infinite;">
+        </div>
+        <div class="absolute bottom-0 right-0 w-[400px] h-[400px] rounded-full opacity-20"
+          style="background:radial-gradient(circle, #6366f1 0%, transparent 70%); animation: floatBlob2 10s ease-in-out infinite;">
+        </div>
         <div
-          class="w-12 h-12 bg-white/10 backdrop-blur-md rounded-lg flex items-center justify-center border border-white/20">
-          <i class="ph-fill ph-coin text-white text-2xl drop-shadow-md"></i>
+          class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[350px] h-[350px] rounded-full opacity-10"
+          style="background:radial-gradient(circle, #ec4899 0%, transparent 70%); animation: floatBlob1 12s ease-in-out infinite reverse;">
         </div>
-        <span class="text-2xl font-bold text-white tracking-tight">KaneBuddy</span>
       </div>
 
-      <div class="relative z-10 max-w-md">
-        <h1 class="text-5xl font-bold text-white leading-tight mb-6 tracking-tight">Kelola keuanganmu menjadi lebih
-          cerdas.</h1>
-        <p class="text-lg text-slate-300 font-light">Pantau pengeluaran, capai target tabungan, dan wujudkan kebebasan
-          finansialmu bersama KaneBuddy.</p>
+      <!-- Grid dot pattern overlay -->
+      <div class="absolute inset-0 opacity-[0.04]"
+        style="background-image: radial-gradient(circle, #fff 1px, transparent 1px); background-size: 28px 28px;"></div>
 
-        <div class="flex items-center gap-4 mt-8 pt-8 border-t border-white/10">
-          <div class="flex -space-x-3">
-            <img src="https://i.pravatar.cc/100?img=1" class="w-10 h-10 rounded-full border-2 border-slate-900" />
-            <img src="https://i.pravatar.cc/100?img=5" class="w-10 h-10 rounded-full border-2 border-slate-900" />
-            <img src="https://i.pravatar.cc/100?img=8" class="w-10 h-10 rounded-full border-2 border-slate-900" />
+      <!-- Top: Logo -->
+      <div class="relative z-10 p-12">
+        <div class="flex items-center gap-4">
+          <div class="w-12 h-12 rounded-2xl flex items-center justify-center shadow-2xl"
+            style="background: linear-gradient(135deg, #f97316, #ea580c);">
+            <i class="ph-fill ph-coin text-white text-2xl"></i>
           </div>
-          <p class="text-sm text-slate-400">Bergabung dengan <span class="text-white font-semibold">10.000+</span>
-            pengguna lainnya.</p>
+          <span class="text-2xl font-bold text-white tracking-tight">Kane<span
+              style="color:#f97316;">Buddy</span></span>
         </div>
+      </div>
+
+      <!-- Center: Hero text -->
+      <div class="relative z-10 px-12 flex flex-col gap-8">
+        <div>
+          <h2 class="text-4xl font-bold text-white leading-tight mb-4">
+            Kelola keuangan<br>
+            <span
+              style="background: linear-gradient(90deg, #f97316, #fb923c, #fbbf24); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">lebih
+              cerdas.</span>
+          </h2>
+          <p class="text-slate-400 text-base leading-relaxed max-w-sm">
+            Pantau pemasukan, pengeluaran, goals, dan shift kerja Anda — semua dalam satu platform.
+          </p>
+        </div>
+
+        <!-- Feature pills -->
+        <div class="flex flex-col gap-3">
+          <div class="flex items-center gap-3 text-sm text-slate-300">
+            <div
+              class="w-8 h-8 rounded-xl bg-emerald-500/15 border border-emerald-500/20 flex items-center justify-center flex-shrink-0">
+              <i class="ph-fill ph-trend-up text-emerald-400 text-base"></i>
+            </div>
+            <span>Dashboard analisis keuangan real-time</span>
+          </div>
+          <div class="flex items-center gap-3 text-sm text-slate-300">
+            <div
+              class="w-8 h-8 rounded-xl bg-orange-500/15 border border-orange-500/20 flex items-center justify-center flex-shrink-0">
+              <i class="ph-fill ph-target text-orange-400 text-base"></i>
+            </div>
+            <span>Manajemen goals &amp; tagihan otomatis</span>
+          </div>
+          <div class="flex items-center gap-3 text-sm text-slate-300">
+            <div
+              class="w-8 h-8 rounded-xl bg-indigo-500/15 border border-indigo-500/20 flex items-center justify-center flex-shrink-0">
+              <i class="ph-fill ph-shield-check text-indigo-400 text-base"></i>
+            </div>
+            <span>Data aman dengan JWT authentication</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom: Quote -->
+      <div class="relative z-10 p-12">
+        <blockquote class="border-l-2 border-orange-500/40 pl-4">
+          <p class="text-slate-400 text-sm italic leading-relaxed">"The secret to financial freedom is making your money
+            work for you."</p>
+        </blockquote>
       </div>
     </div>
 
-    <!-- Right: Forms -->
-    <div class="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-12 relative bg-white dark:bg-slate-900">
-      <!-- Decoration for mobile -->
-      <div class="lg:hidden absolute top-0 inset-x-0 h-40 bg-gradient-to-b from-primary/10 to-transparent"></div>
+    <!-- ── RIGHT PANEL: Form ── -->
+    <div class="flex-1 flex items-center justify-center p-6 overflow-y-auto" style="background: #0f172a;">
 
-      <div class="w-full max-w-[420px] relative z-10">
+      <!-- Card -->
+      <div class="w-full max-w-[400px] animate-slide-up">
 
-        <!-- Mobile Header (hidden on large desktop) -->
-        <div class="lg:hidden flex flex-col items-center justify-center mb-8 mt-4">
-          <div
-            class="w-16 h-16 bg-gradient-to-br from-primary to-tertiary rounded-lg flex items-center justify-center mb-4 shadow-lg shadow-primary/30">
-            <i class="ph-fill ph-coin text-white text-3xl"></i>
+        <!-- Mobile logo (shown only on small screens) -->
+        <div class="lg:hidden flex items-center gap-3 mb-8 justify-center">
+          <div class="w-10 h-10 rounded-xl flex items-center justify-center"
+            style="background: linear-gradient(135deg, #f97316, #ea580c);">
+            <i class="ph-fill ph-coin text-white text-xl"></i>
           </div>
-          <h2 class="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">KaneBuddy</h2>
+          <span class="text-xl font-bold text-white tracking-tight">Kane<span style="color:#f97316;">Buddy</span></span>
         </div>
 
+        <!-- Heading -->
         <div class="mb-8">
-          <h2 class="text-3xl font-bold text-slate-900 dark:text-white tracking-tight mb-2">Selamat Datang! 👋</h2>
-          <p class="text-slate-500 dark:text-slate-400">Silakan masuk atau daftar untuk melanjutkan.</p>
+          <h3 class="text-2xl font-bold text-white mb-1">Selamat datang 👋</h3>
+          <p class="text-slate-500 text-sm">Masuk ke akun Anda untuk melanjutkan.</p>
         </div>
 
-        <!-- Pill Tab Switcher -->
-        <div id="auth-tab-indicator"
-          class="flex p-1.5 bg-slate-100 dark:bg-slate-800 rounded-lg mb-8 border border-slate-200 dark:border-slate-700 relative">
-          <div id="tab-pill"
-            class="absolute top-1.5 bottom-1.5 left-1.5 right-[50%] bg-white dark:bg-slate-700 rounded-lg shadow transition-all duration-300 ease-in-out">
-          </div>
+        <!-- Tab Switcher -->
+        <div class="flex mb-8 border-b border-slate-800">
           <button id="tab-login" onclick="showAuthTab('login')" type="button"
-            class="relative z-10 flex-1 py-2 rounded-lg text-sm font-bold transition-colors text-slate-900 dark:text-white">Masuk</button>
+            class="flex-1 pb-3 text-sm font-bold text-white border-b-2 border-orange-500 transition-all">Login</button>
           <button id="tab-register" onclick="showAuthTab('register')" type="button"
-            class="relative z-10 flex-1 py-2 rounded-lg text-sm font-semibold transition-colors text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300">Daftar</button>
+            class="flex-1 pb-3 text-sm font-semibold text-slate-500 border-b-2 border-transparent hover:text-slate-300 transition-all">Register</button>
         </div>
 
-        <!-- Login Form -->
+        <!-- ── LOGIN FORM ── -->
         <form id="form-login" onsubmit="handleLogin(event)" class="space-y-5">
-          <div>
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Email address</label>
+
+          <div class="space-y-1.5">
+            <label class="block text-xs font-semibold text-slate-400 uppercase tracking-widest">Email</label>
             <div class="relative group">
-              <i
-                class="ph ph-envelope absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors text-lg"></i>
+              <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <i
+                  class="ph ph-envelope text-slate-600 group-focus-within:text-orange-500 transition-colors text-lg"></i>
+              </div>
               <input id="login-email" type="email" placeholder="nama@email.com" required
-                class="w-full pl-12 pr-4 py-3.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary text-sm transition-all shadow-sm" />
+                class="w-full pl-12 pr-4 py-3.5 rounded-2xl text-white text-sm font-medium placeholder:text-slate-700 transition-all focus:outline-none focus:ring-2 focus:ring-orange-500/50"
+                style="background:#1e293b; border: 1.5px solid #334155;" />
             </div>
           </div>
-          <div>
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Password</label>
+
+          <div class="space-y-1.5">
+            <label class="block text-xs font-semibold text-slate-400 uppercase tracking-widest">Password</label>
             <div class="relative group">
-              <i
-                class="ph ph-lock absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors text-lg"></i>
+              <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <i class="ph ph-lock text-slate-600 group-focus-within:text-orange-500 transition-colors text-lg"></i>
+              </div>
               <input id="login-password" type="password" placeholder="••••••••" required
-                class="w-full pl-12 pr-4 py-3.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary text-sm transition-all shadow-sm" />
-            </div>
-            <div class="flex justify-end mt-2">
-              <a href="#"
-                class="text-xs font-semibold text-primary-hover dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors">Lupa
-                sandi?</a>
+                class="w-full pl-12 pr-12 py-3.5 rounded-2xl text-white text-sm font-medium placeholder:text-slate-700 transition-all focus:outline-none focus:ring-2 focus:ring-orange-500/50"
+                style="background:#1e293b; border: 1.5px solid #334155;" />
+              <button type="button" onclick="togglePwVisibility('login-password', this)"
+                class="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-600 hover:text-slate-400 transition-colors">
+                <i class="ph ph-eye text-lg"></i>
+              </button>
             </div>
           </div>
+
+          <div class="flex justify-end">
+            <a href="#" class="text-xs font-medium text-slate-500 hover:text-orange-400 transition-colors">Lupa
+              password?</a>
+          </div>
+
           <div id="login-error"
-            class="hidden text-sm text-rose-600 bg-rose-50 dark:bg-rose-500/10 px-4 py-3 rounded-lg flex items-center gap-2 border border-rose-100 dark:border-rose-500/20">
-            <i class="ph ph-warning-circle flex-shrink-0 text-base"></i><span></span>
+            class="hidden text-xs text-rose-400 bg-rose-500/10 px-4 py-3 rounded-xl flex items-center gap-2 border border-rose-500/20">
+            <i class="ph-fill ph-warning-circle flex-shrink-0 text-base"></i>
+            <span class="font-medium"></span>
           </div>
+
           <button type="submit"
-            class="w-full bg-slate-900 dark:bg-white hover:bg-slate-800 dark:hover:bg-slate-100 text-white dark:text-slate-900 py-3.5 rounded-lg font-bold transition-all shadow mt-4 flex items-center justify-center gap-2">
-            <span>Masuk ke Akun</span>
-            <i class="ph ph-arrow-right"></i>
+            class="w-full py-3.5 rounded-2xl text-white text-sm font-bold transition-all active:scale-[0.98] mt-2 flex items-center justify-center gap-2 shadow-lg"
+            style="background: linear-gradient(135deg, #f97316, #ea580c); box-shadow: 0 8px 30px rgba(249,115,22,0.3);"
+            onmouseenter="this.style.boxShadow='0 12px 40px rgba(249,115,22,0.45)'"
+            onmouseleave="this.style.boxShadow='0 8px 30px rgba(249,115,22,0.3)'">
+            <i class="ph ph-sign-in text-lg"></i>
+            <span>Masuk Sekarang</span>
           </button>
+
         </form>
 
-        <!-- Register Form -->
+        <!-- ── REGISTER FORM ── -->
         <form id="form-register" onsubmit="handleRegister(event)" class="space-y-4 hidden">
-          <div>
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Nama Lengkap</label>
+
+          <div class="space-y-1.5">
+            <label class="block text-xs font-semibold text-slate-400 uppercase tracking-widest">Nama Lengkap</label>
             <div class="relative group">
-              <i
-                class="ph ph-user absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors text-lg"></i>
-              <input id="reg-name" type="text" placeholder="Nama Anda" required
-                class="w-full pl-12 pr-4 py-3 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary text-sm transition-all shadow-sm" />
+              <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <i class="ph ph-user text-slate-600 group-focus-within:text-orange-500 transition-colors text-lg"></i>
+              </div>
+              <input id="reg-name" type="text" placeholder="John Doe" required
+                class="w-full pl-12 pr-4 py-3.5 rounded-2xl text-white text-sm font-medium placeholder:text-slate-700 transition-all focus:outline-none focus:ring-2 focus:ring-orange-500/50"
+                style="background:#1e293b; border: 1.5px solid #334155;" />
             </div>
           </div>
-          <div>
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Email address</label>
+
+          <div class="space-y-1.5">
+            <label class="block text-xs font-semibold text-slate-400 uppercase tracking-widest">Email</label>
             <div class="relative group">
-              <i
-                class="ph ph-envelope absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors text-lg"></i>
+              <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <i
+                  class="ph ph-envelope text-slate-600 group-focus-within:text-orange-500 transition-colors text-lg"></i>
+              </div>
               <input id="reg-email" type="email" placeholder="nama@email.com" required
-                class="w-full pl-12 pr-4 py-3 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary text-sm transition-all shadow-sm" />
+                class="w-full pl-12 pr-4 py-3.5 rounded-2xl text-white text-sm font-medium placeholder:text-slate-700 transition-all focus:outline-none focus:ring-2 focus:ring-orange-500/50"
+                style="background:#1e293b; border: 1.5px solid #334155;" />
             </div>
           </div>
-          <div>
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Password</label>
+
+          <div class="space-y-1.5">
+            <label class="block text-xs font-semibold text-slate-400 uppercase tracking-widest">Password</label>
             <div class="relative group">
-              <i
-                class="ph ph-lock absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors text-lg"></i>
+              <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <i class="ph ph-lock text-slate-600 group-focus-within:text-orange-500 transition-colors text-lg"></i>
+              </div>
               <input id="reg-password" type="password" placeholder="Min. 6 karakter" required minlength="6"
-                class="w-full pl-12 pr-4 py-3 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary text-sm transition-all shadow-sm" />
+                class="w-full pl-12 pr-12 py-3.5 rounded-2xl text-white text-sm font-medium placeholder:text-slate-700 transition-all focus:outline-none focus:ring-2 focus:ring-orange-500/50"
+                style="background:#1e293b; border: 1.5px solid #334155;" />
+              <button type="button" onclick="togglePwVisibility('reg-password', this)"
+                class="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-600 hover:text-slate-400 transition-colors">
+                <i class="ph ph-eye text-lg"></i>
+              </button>
             </div>
           </div>
+
           <div id="reg-error"
-            class="hidden text-sm text-rose-600 bg-rose-50 dark:bg-rose-500/10 px-4 py-3 rounded-lg flex items-center gap-2 border border-rose-100 dark:border-rose-500/20">
-            <i class="ph ph-warning-circle flex-shrink-0 text-base"></i><span></span>
+            class="hidden text-xs text-rose-400 bg-rose-500/10 px-4 py-3 rounded-xl flex items-center gap-2 border border-rose-500/20">
+            <i class="ph-fill ph-warning-circle flex-shrink-0 text-base"></i>
+            <span class="font-medium"></span>
           </div>
+
           <button type="submit"
-            class="w-full bg-slate-900 dark:bg-white hover:bg-slate-800 dark:hover:bg-slate-100 text-white dark:text-slate-900 py-3.5 rounded-lg font-bold transition-all shadow mt-4 flex items-center justify-center gap-2">
-            <span>Buat Akun Gratis</span>
-            <i class="ph ph-arrow-right"></i>
+            class="w-full py-3.5 rounded-2xl text-white text-sm font-bold transition-all active:scale-[0.98] mt-2 flex items-center justify-center gap-2 shadow-lg"
+            style="background: linear-gradient(135deg, #f97316, #ea580c); box-shadow: 0 8px 30px rgba(249,115,22,0.3);"
+            onmouseenter="this.style.boxShadow='0 12px 40px rgba(249,115,22,0.45)'"
+            onmouseleave="this.style.boxShadow='0 8px 30px rgba(249,115,22,0.3)'">
+            <i class="ph ph-user-plus text-lg"></i>
+            <span>Buat Akun</span>
           </button>
+
         </form>
 
-        <p class="text-xs text-center text-slate-500 mt-8">Dengan masuk, Anda menyetujui <a href="#"
-            class="text-slate-900 dark:text-white font-medium hover:underline">Ketentuan Layanan</a> dan <a href="#"
-            class="text-slate-900 dark:text-white font-medium hover:underline">Kebijakan Privasi</a> kami.</p>
+        <!-- Footer note -->
+        <p class="text-center text-xs text-slate-700 mt-8">© 2025 KaneBuddy · Semua data terenkripsi</p>
       </div>
     </div>
   </div>
+
+  <!-- Auth screen animation styles -->
+  <style>
+    @keyframes floatBlob1 {
+
+      0%,
+      100% {
+        transform: translate(0, 0) scale(1);
+      }
+
+      50% {
+        transform: translate(30px, -20px) scale(1.08);
+      }
+    }
+
+    @keyframes floatBlob2 {
+
+      0%,
+      100% {
+        transform: translate(0, 0) scale(1);
+      }
+
+      50% {
+        transform: translate(-25px, 15px) scale(1.06);
+      }
+    }
+
+    #auth-screen input:focus {
+      border-color: #f97316 !important;
+    }
+
+    #tab-login,
+    #tab-register {
+      transition: color 0.25s, border-color 0.25s;
+    }
+  </style>
 
   <!-- ===== EXPORT MODAL ===== -->
   <div id="export-modal" class="fixed inset-0 z-[150] hidden flex items-center justify-center">
@@ -487,23 +629,45 @@
 
         <div class="w-px h-6 bg-light-border dark:bg-dark-border mx-1"></div>
 
-        <!-- User Profile -->
-        <div id="sidebar-user" class="flex items-center gap-3 pl-1">
-          <div class="text-right hidden lg:block">
-            <p id="sidebar-name"
-              class="text-sm font-semibold text-slate-900 dark:text-white md:w-auto truncate max-w-[120px]">User</p>
-            <p id="sidebar-email" class="text-xs text-slate-500 dark:text-slate-400 md:w-auto truncate max-w-[140px]">
-              email@email.com</p>
-          </div>
-          <img id="sidebar-avatar" src="https://ui-avatars.com/api/?name=U&background=6366f1&color=fff"
-            class="w-9 h-9 rounded-full border border-primary/30" alt="Avatar" />
-        </div>
+        <!-- User Profile Dropdown -->
+        <div class="relative">
+          <button id="profile-dropdown-btn"
+            class="flex items-center gap-3 pl-1 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg p-2 transition-colors">
+            <div class="text-right hidden lg:block">
+              <p id="topbar-name"
+                class="text-sm font-semibold text-slate-900 dark:text-white md:w-auto truncate max-w-[120px]">User</p>
+              <p id="topbar-email" class="text-xs text-slate-500 dark:text-slate-400 md:w-auto truncate max-w-[140px]">
+                email@email.com</p>
+            </div>
+            <img id="topbar-avatar" src="https://ui-avatars.com/api/?name=U&background=6366f1&color=fff"
+              class="w-9 h-9 rounded-full border border-primary/30 object-cover" style="object-fit: cover;"
+              alt="Avatar" />
+            <i class="ph ph-caret-down text-sm text-slate-500"></i>
+          </button>
 
-        <!-- Logout -->
-        <button onclick="logout()" title="Keluar"
-          class="p-2.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-colors ml-1">
-          <i class="ph ph-sign-out text-lg"></i>
-        </button>
+          <!-- Dropdown Menu -->
+          <div id="profile-dropdown"
+            class="absolute right-0 top-full mt-2 w-48 bg-white dark:bg-dark-surface border border-light-border dark:border-dark-border rounded-lg shadow-lg py-1 z-50 hidden">
+            <a href="#"
+              onclick="document.querySelector('[data-view=settings]').click(); document.getElementById('profile-dropdown').classList.add('hidden');"
+              class="flex items-center gap-3 px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
+              <i class="ph ph-user text-lg"></i>
+              Edit Profile
+            </a>
+            <a href="#"
+              onclick="document.querySelector('[data-view=settings]').click(); document.getElementById('profile-dropdown').classList.add('hidden');"
+              class="flex items-center gap-3 px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
+              <i class="ph ph-gear text-lg"></i>
+              Settings
+            </a>
+            <div class="border-t border-light-border dark:border-dark-border my-1"></div>
+            <a href="#" onclick="logout(); document.getElementById('profile-dropdown').classList.add('hidden');"
+              class="flex items-center gap-3 px-4 py-2 text-sm text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20">
+              <i class="ph ph-sign-out text-lg"></i>
+              Logout
+            </a>
+          </div>
+        </div>
       </div>
     </header>
 
@@ -2680,6 +2844,60 @@
           <button id="confirm-btn-ok"
             class="flex-1 py-3 rounded-lg bg-rose-500 hover:bg-rose-600 text-white font-semibold transition-colors shadow-lg shadow-rose-500/30">Ya,
             Lanjutkan</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Image Crop Modal -->
+  <div id="image-crop-modal" class="fixed inset-0 z-[300] hidden flex items-center justify-center">
+    <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" id="crop-backdrop"></div>
+    <div
+      class="relative z-10 bg-white dark:bg-dark-surface rounded-2xl shadow-2xl w-full max-w-2xl mx-4 animate-fade-in overflow-hidden">
+      <div class="p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-xl font-bold text-slate-900 dark:text-white">Crop Gambar Profil</h3>
+          <button onclick="closeCropModal()"
+            class="w-8 h-8 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center transition-colors">
+            <i class="ph ph-x text-lg"></i>
+          </button>
+        </div>
+
+        <div class="space-y-4">
+          <!-- Crop Canvas Container -->
+          <div class="relative bg-slate-100 dark:bg-slate-800 rounded-lg overflow-hidden" style="height: 400px;">
+            <canvas id="crop-canvas" class="max-w-full max-h-full"></canvas>
+            <div id="crop-overlay" class="absolute inset-0 pointer-events-none">
+              <div id="crop-selection" class="absolute border-2 border-primary bg-primary/10"></div>
+            </div>
+          </div>
+
+          <!-- Crop Controls -->
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <button onclick="resetCrop()"
+                class="px-3 py-2 rounded-lg border border-light-border dark:border-dark-border text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                <i class="ph ph-arrow-counter-clockwise text-sm mr-1"></i>
+                Reset
+              </button>
+              <button onclick="fitToSquare()"
+                class="px-3 py-2 rounded-lg border border-light-border dark:border-dark-border text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                <i class="ph ph-square text-sm mr-1"></i>
+                Square
+              </button>
+            </div>
+
+            <div class="flex items-center gap-2">
+              <button onclick="closeCropModal()"
+                class="px-4 py-2 rounded-lg border border-light-border dark:border-dark-border text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                Batal
+              </button>
+              <button onclick="applyCrop()"
+                class="px-4 py-2 rounded-lg bg-primary hover:bg-primary/90 text-white font-semibold transition-colors shadow-lg shadow-primary/30">
+                Terapkan Crop
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

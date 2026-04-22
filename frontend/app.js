@@ -1,111 +1,170 @@
 // =====================================================================
-// UTILS & UI
+// GLOBAL CONFIGURATION & STATE
 // =====================================================================
-window.escapeHtml = function (unsafe) {
-  if (typeof unsafe !== 'string') return unsafe;
-  return String(unsafe)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-};
 
-window.showCustomConfirm = function (message, onConfirm) {
-  const modal = document.getElementById('custom-confirm-modal');
-  const msgEl = document.getElementById('confirm-message');
-  const btnOk = document.getElementById('confirm-btn-ok');
-  const btnCancel = document.getElementById('confirm-btn-cancel');
+const API_BASE_URL = window.API_BASE_URL || "http://localhost:3000";
 
-  if (!modal) {
-    if (window.confirm(message)) onConfirm();
-    return;
+console.log("KaneBuddy: app.js loading...");
+
+// AUTH STATE
+let currentUser = null;
+let authToken = localStorage.getItem("auth_token") || null;
+
+try {
+  const savedUser = localStorage.getItem("budget_current_user");
+  if (savedUser && savedUser !== "undefined") {
+    currentUser = JSON.parse(savedUser);
   }
+} catch (e) {
+  console.error("KaneBuddy: Error parsing session!", e);
+  localStorage.removeItem("budget_current_user");
+  localStorage.removeItem("auth_token");
+}
 
-  msgEl.textContent = message;
-  modal.classList.remove('hidden');
+// DATA ARRAYS
+let transactions = [], goals = [], bills = [], shifts = [], tasks = [],
+  categories = [], recurring = [], debts = [], budgets = [], assets = [],
+  remittances = [], documentsData = [], nenkinData = [];
 
-  const hideModal = () => modal.classList.add('hidden');
+// CHART INSTANCES
+let taskChartInstance = null;
+let spendingFlowChartInstance = null;
+let categoryChartInstance = null;
+let shiftChartInstance = null;
+let burnRateChartInstance = null;
 
-  btnCancel.onclick = hideModal;
+// FEATURE STATES & UI SETTINGS
+let currentShiftViewDate = new Date();
+let isBalanceHidden = localStorage.getItem("budget_balance_hidden") === "true";
+let spendingFlowPeriod = "monthly";
+let spendingFlowCustomStart = "";
+let spendingFlowCustomEnd = "";
+let catFlowPeriod = "monthly";
+let catFlowCustomStart = "";
+let catFlowCustomEnd = "";
+let currentPemasukanPage = 1;
+let currentPengeluaranPage = 1;
+let currentShiftPage = 1;
+let shiftChartPeriod = "daily"; // daily, weekly, monthly
+let exportPeriod = "weekly";
+let currentTaskView = "list";
+let activeTaskIdForSubtask = null;
 
-  btnOk.onclick = () => {
-    hideModal();
-    if (onConfirm) onConfirm();
-  };
+// POMODORO STATE
+let pomoTimer = null;
+let pomoTimeLeft = 25 * 60;
+let isPomoRunning = false;
+let currentPomoMode = "work"; // work, shortBreak, longBreak
+
+// PICKER & MODAL STATES
+let targetMonthInputId = "";
+let currentPickerYear = new Date().getFullYear();
+let targetDatePickerInputId = "";
+let viewedDatePickerDate = new Date();
+
+// IMAGE CROP STATE
+let cropCanvas = null;
+let cropImage = null;
+let cropSelection = { x: 0, y: 0, width: 200, height: 200 };
+let isDragging = false;
+let dragHandle = null;
+let dragStart = { x: 0, y: 0 };
+let originalSelection = null;
+
+// CONSTANTS & CONFIG
+const TX_PER_PAGE = 10;
+const SHIFTS_PER_PAGE = 5;
+const DEFAULT_CATEGORIES = [
+  { name: "Makanan & Minuman", color: "#f97316" },
+  { name: "Transportasi", color: "#0ea5e9" },
+  { name: "Keperluan Kucing", color: "#eab308" },
+  { name: "Belanja", color: "#ec4899" },
+  { name: "Hiburan", color: "#a855f7" },
+  { name: "Tagihan", color: "#f43f5e" },
+  { name: "Gaji", color: "#99dd04" },
+  { name: "Bonus", color: "#f59e0b" },
+  { name: "Investasi", color: "#10b981" },
+];
+const SHIFT_TYPES = {
+  Morning: { label: "Morning Shift", color: "emerald", startDefault: "08:00", endDefault: "16:00", normalHours: 8 },
+  Afternoon: { label: "Afternoon Shift", color: "amber", startDefault: "13:00", endDefault: "21:00", normalHours: 8 },
+  Night: { label: "Night Shift", color: "indigo", startDefault: "20:00", endDefault: "04:00", normalHours: 8 },
+  Full: { label: "Full Day", color: "rose", startDefault: "08:00", endDefault: "20:00", normalHours: 12 },
+  Lembur: { label: "Lembur", color: "purple", startDefault: "17:00", endDefault: "21:00", normalHours: 0 },
+  OffDay: { label: "Off Day", color: "slate", startDefault: "00:00", endDefault: "00:00", normalHours: 0 },
+};
+const pomoModes = {
+  work: { time: 25 * 60, label: "Work Time", color: "rose" },
+  shortBreak: { time: 5 * 60, label: "Short Break", color: "sky" },
+  longBreak: { time: 15 * 60, label: "Long Break", color: "indigo" },
 };
 
-// =====================================================================
-// USER AUTH
-// =====================================================================
-let users = JSON.parse(localStorage.getItem("budget_users")) || [];
-let currentUser = JSON.parse(localStorage.getItem("budget_current_user")) || null;
-
-function hashPw(pw) {
-  let h = 0;
-  for (let c of pw) h = (Math.imul(31, h) + c.charCodeAt(0)) | 0;
-  return h.toString(36);
-}
-
-function saveUsers() {
-  localStorage.setItem("budget_users", JSON.stringify(users));
-}
-function saveSession(u) {
-  localStorage.setItem("budget_current_user", JSON.stringify(u));
-  currentUser = u;
-}
-function clearSession() {
-  localStorage.removeItem("budget_current_user");
-  currentUser = null;
-}
+// API ENDPOINTS
+const API_URL = `${API_BASE_URL}/api/transactions`;
+const SHIFTS_API = `${API_BASE_URL}/api/shifts`;
+const TASKS_API = `${API_BASE_URL}/api/tasks`;
+const REMITTANCE_API = `${API_BASE_URL}/api/remittances`;
+const DOCUMENTS_API = `${API_BASE_URL}/api/documents`;
+const NENKIN_API = `${API_BASE_URL}/api/nenkin`;
 
 function showAuthTab(tab) {
   const isLogin = tab === "login";
-  document.getElementById("form-login").classList.toggle("hidden", !isLogin);
-  document.getElementById("form-register").classList.toggle("hidden", isLogin);
+  const loginForm = document.getElementById("form-login");
+  const registerForm = document.getElementById("form-register");
 
-  const pill = document.getElementById("tab-pill");
-  if (pill) {
-    pill.style.transform = isLogin ? "translateX(0)" : "translateX(100%)";
-  }
+  if (loginForm) loginForm.classList.toggle("hidden", !isLogin);
+  if (registerForm) registerForm.classList.toggle("hidden", isLogin);
 
   const btnLogin = document.getElementById("tab-login");
   const btnReg = document.getElementById("tab-register");
 
-  if (isLogin) {
-    btnLogin.className = "relative z-10 flex-1 py-2 rounded-lg text-sm font-bold transition-colors text-slate-900 dark:text-white";
-    btnReg.className = "relative z-10 flex-1 py-2 rounded-lg text-sm font-semibold transition-colors text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300";
-  } else {
-    btnLogin.className = "relative z-10 flex-1 py-2 rounded-lg text-sm font-semibold transition-colors text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300";
-    btnReg.className = "relative z-10 flex-1 py-2 rounded-lg text-sm font-bold transition-colors text-slate-900 dark:text-white";
+  // Underline tab style
+  if (btnLogin) {
+    btnLogin.className = isLogin
+      ? "flex-1 pb-3 text-sm font-bold text-white border-b-2 border-orange-500 transition-all"
+      : "flex-1 pb-3 text-sm font-semibold text-slate-500 border-b-2 border-transparent hover:text-slate-300 transition-all";
   }
+  if (btnReg) {
+    btnReg.className = !isLogin
+      ? "flex-1 pb-3 text-sm font-bold text-white border-b-2 border-orange-500 transition-all"
+      : "flex-1 pb-3 text-sm font-semibold text-slate-500 border-b-2 border-transparent hover:text-slate-300 transition-all";
+  }
+}
+
+function togglePwVisibility(inputId, btn) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  const isHidden = input.type === "password";
+  input.type = isHidden ? "text" : "password";
+  const icon = btn.querySelector("i");
+  if (icon) icon.className = isHidden ? "ph ph-eye-slash text-lg" : "ph ph-eye text-lg";
 }
 
 async function handleLogin(e) {
   e.preventDefault();
   const email = document.getElementById("login-email").value.trim().toLowerCase();
-  const pass = hashPw(document.getElementById("login-password").value);
+  const pass = document.getElementById("login-password").value;
   const errEl = document.getElementById("login-error");
   const span = errEl ? errEl.querySelector("span") : null;
 
   try {
-    const res = await fetch("http://localhost:3000/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password: pass }),
-    });
-    const data = await res.json();
-
-    if (!res.ok) {
-      if (errEl) errEl.classList.remove("hidden");
-      if (span) span.textContent = data.error || "Login gagal";
-      return;
-    }
+    const data = await apiCall("/api/auth/login", "POST", { email, password: pass });
 
     if (errEl) errEl.classList.add("hidden");
-    loginUser(data.user); // Masuk dengan data dari MySQL
+
+    // Simpan sesi JWT — saveSession menyimpan user + token ke localStorage
+    saveSession(data.user, data.token);
+    loginUser(data.user);
   } catch (err) {
     console.error(err);
+    if (errEl) errEl.classList.remove("hidden");
+    if (err.status === 401) {
+      if (span) span.textContent = "Email atau password salah!";
+    } else if (err.status === 429) {
+      if (span) span.textContent = "Terlalu banyak percobaan. Silakan coba lagi nanti.";
+    } else {
+      if (span) span.textContent = err.error || "Login gagal. Periksa koneksi dan kredensial Anda.";
+    }
   }
 }
 
@@ -117,157 +176,365 @@ async function handleRegister(e) {
   const errEl = document.getElementById("reg-error");
   const span = errEl ? errEl.querySelector("span") : null;
 
-  const userObj = { id: uid(), name, email, password: hashPw(pass) };
-
   try {
-    const res = await fetch("http://localhost:3000/api/auth/register", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(userObj),
-    });
-    const data = await res.json();
-
-    if (!res.ok) {
-      if (errEl) errEl.classList.remove("hidden");
-      if (span) span.textContent = data.error || "Registrasi gagal";
-      return;
-    }
+    const data = await apiCall("/api/auth/register", "POST", { name, email, password: pass });
 
     if (errEl) errEl.classList.add("hidden");
-    loginUser(userObj); // Langsung login setelah sukses masuk database
+
+    // Simpan sesi JWT
+    saveSession(data.user, data.token);
+    loginUser(data.user);
   } catch (err) {
     console.error(err);
+    if (errEl) errEl.classList.remove("hidden");
+    if (err.status === 429) {
+      if (span) span.textContent = "Terlalu banyak percobaan. Silakan coba lagi nanti.";
+    } else {
+      if (span) span.textContent = err.error || "Registrasi gagal. Email mungkin sudah terdaftar.";
+    }
   }
 }
 
-// Bersihkan data lama (tanpa prefix user) dari localStorage warisan versi lama
+// Bersihkan SEMUA data lama dari localStorage (legacy dan per-user)
 function clearLegacyLocalStorage() {
-  const legacyKeys = [
-    'budget_transactions', 'budget_goals', 'budget_bills',
-    'budget_shifts', 'budget_tasks', 'budget_categories',
-    'budget_recurring', 'budget_debts', 'budget_budgets', 'budget_assets'
-  ];
-  legacyKeys.forEach(k => localStorage.removeItem(k));
+  const baseKeys = ["budget_transactions", "budget_goals", "budget_bills", "budget_shifts", "budget_tasks", "budget_categories", "budget_recurring", "budget_debts", "budget_budgets", "budget_assets"];
+  // Hapus key tanpa prefix
+  baseKeys.forEach((k) => localStorage.removeItem(k));
+  // Hapus key dengan prefix u_<id>_
+  const toRemove = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith("u_") && baseKeys.some((bk) => key.endsWith(bk))) {
+      toRemove.push(key);
+    }
+  }
+  toRemove.forEach((k) => localStorage.removeItem(k));
 }
 
-function loginUser(user) {
-  saveSession(user);
-  clearLegacyLocalStorage(); // Hapus data lama tanpa prefix user
-  loadUserData();
-  document.getElementById("auth-screen").classList.add("hidden");
-  updateUserUI(user);
+// loginUser, logout, updateUserUI are defined further below in the JWT auth section.
 
-  // PANGGIL ULANG SEMUA DATA DARI DATABASE SETELAH LOGIN SUKSES 👇
-  getTransactionsFromDB();
-  getGoalsFromDB();
-  getBillsFromDB();
-  getShiftsFromDB();
-  getTasksFromDB();
+// Image validation/compression and crop modal are handled separately when needed.
+// Setup crop event listeners
+function setupCropEventListeners() {
+  const canvas = cropCanvas;
 
-  // Initial render
-  updateDashboard();
-  renderPemasukan();
-  renderPengeluaran();
-  renderGoals();
-  renderBills();
-  renderShifts();
+  canvas.onmousedown = (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    // Check for resize handles first (corners and edges)
+    const handle = getCropHandle(x, y);
+    if (handle) {
+      isDragging = true;
+      dragHandle = handle;
+      dragStart = { x, y };
+      originalSelection = { ...cropSelection };
+      canvas.style.cursor = getCursorForHandle(handle);
+      return;
+    }
+
+    // Check if clicking inside selection for move
+    if (x >= cropSelection.x && x <= cropSelection.x + cropSelection.width && y >= cropSelection.y && y <= cropSelection.y + cropSelection.height) {
+      isDragging = true;
+      dragHandle = "move";
+      dragStart = { x: x - cropSelection.x, y: y - cropSelection.y };
+      canvas.style.cursor = "move";
+    }
+  };
+
+  canvas.onmousemove = (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    if (!isDragging) {
+      // Update cursor based on position
+      const handle = getCropHandle(x, y);
+      canvas.style.cursor = handle ? getCursorForHandle(handle) : x >= cropSelection.x && x <= cropSelection.x + cropSelection.width && y >= cropSelection.y && y <= cropSelection.y + cropSelection.height ? "move" : "default";
+      return;
+    }
+
+    if (dragHandle === "move") {
+      cropSelection.x = Math.max(0, Math.min(canvas.width - cropSelection.width, x - dragStart.x));
+      cropSelection.y = Math.max(0, Math.min(canvas.height - cropSelection.height, y - dragStart.y));
+    } else {
+      // Handle resize
+      resizeCropSelection(dragHandle, x, y);
+    }
+
+    updateCropOverlay();
+  };
+
+  canvas.onmouseup = () => {
+    isDragging = false;
+    dragHandle = null;
+    originalSelection = null;
+    canvas.style.cursor = "default";
+  };
 }
 
-function logout() {
-  showCustomConfirm("Yakin ingin keluar?", () => {
-    clearSession();
-    document.getElementById("auth-screen").classList.remove("hidden");
-    document.getElementById("form-login").reset();
-    showToast("Sampai jumpa!", "info");
-  });
+// Update crop overlay
+function updateCropOverlay() {
+  const overlay = document.getElementById("crop-overlay");
+  const selection = document.getElementById("crop-selection");
+
+  selection.style.left = cropSelection.x + "px";
+  selection.style.top = cropSelection.y + "px";
+  selection.style.width = cropSelection.width + "px";
+  selection.style.height = cropSelection.height + "px";
 }
 
-function updateUserUI(user) {
-  const avatarUrl = user.photo ? user.photo : `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=6366f1&color=fff`;
-  ["sidebar-avatar", "topbar-avatar", "settings-avatar"].forEach((id) => {
-    const el = document.getElementById(id);
-    if (el) el.src = avatarUrl;
-  });
-  setEl("sidebar-name", user.name);
-  setEl("topbar-name", user.name);
-  setEl("settings-name", user.name);
-  setEl("sidebar-email", user.email);
-  setEl("topbar-email", user.email);
-  setEl("settings-email", user.email);
+// Get crop handle based on position
+function getCropHandle(x, y) {
+  const sel = cropSelection;
+  const handleSize = 10;
+
+  // Corners
+  if (Math.abs(x - sel.x) < handleSize && Math.abs(y - sel.y) < handleSize) return "nw-resize";
+  if (Math.abs(x - (sel.x + sel.width)) < handleSize && Math.abs(y - sel.y) < handleSize) return "ne-resize";
+  if (Math.abs(x - sel.x) < handleSize && Math.abs(y - (sel.y + sel.height)) < handleSize) return "sw-resize";
+  if (Math.abs(x - (sel.x + sel.width)) < handleSize && Math.abs(y - (sel.y + sel.height)) < handleSize) return "se-resize";
+
+  // Edges
+  if (Math.abs(y - sel.y) < handleSize && x > sel.x && x < sel.x + sel.width) return "n-resize";
+  if (Math.abs(y - (sel.y + sel.height)) < handleSize && x > sel.x && x < sel.x + sel.width) return "s-resize";
+  if (Math.abs(x - sel.x) < handleSize && y > sel.y && y < sel.y + sel.height) return "w-resize";
+  if (Math.abs(x - (sel.x + sel.width)) < handleSize && y > sel.y && y < sel.y + sel.height) return "e-resize";
+
+  return null;
+}
+
+// Get cursor style for handle
+function getCursorForHandle(handle) {
+  return handle;
+}
+
+// Resize crop selection
+function resizeCropSelection(handle, x, y) {
+  const dx = x - dragStart.x;
+  const dy = y - dragStart.y;
+  const minSize = 50;
+
+  switch (handle) {
+    case "nw-resize":
+      cropSelection.x = Math.max(0, Math.min(originalSelection.x + originalSelection.width - minSize, originalSelection.x + dx));
+      cropSelection.y = Math.max(0, Math.min(originalSelection.y + originalSelection.height - minSize, originalSelection.y + dy));
+      cropSelection.width = originalSelection.width - (cropSelection.x - originalSelection.x);
+      cropSelection.height = originalSelection.height - (cropSelection.y - originalSelection.y);
+      break;
+    case "ne-resize":
+      cropSelection.y = Math.max(0, Math.min(originalSelection.y + originalSelection.height - minSize, originalSelection.y + dy));
+      cropSelection.width = Math.max(minSize, originalSelection.width + dx);
+      cropSelection.height = originalSelection.height - (cropSelection.y - originalSelection.y);
+      break;
+    case "sw-resize":
+      cropSelection.x = Math.max(0, Math.min(originalSelection.x + originalSelection.width - minSize, originalSelection.x + dx));
+      cropSelection.width = originalSelection.width - (cropSelection.x - originalSelection.x);
+      cropSelection.height = Math.max(minSize, originalSelection.height + dy);
+      break;
+    case "se-resize":
+      cropSelection.width = Math.max(minSize, originalSelection.width + dx);
+      cropSelection.height = Math.max(minSize, originalSelection.height + dy);
+      break;
+    case "n-resize":
+      cropSelection.y = Math.max(0, Math.min(originalSelection.y + originalSelection.height - minSize, originalSelection.y + dy));
+      cropSelection.height = originalSelection.height - (cropSelection.y - originalSelection.y);
+      break;
+    case "s-resize":
+      cropSelection.height = Math.max(minSize, originalSelection.height + dy);
+      break;
+    case "w-resize":
+      cropSelection.x = Math.max(0, Math.min(originalSelection.x + originalSelection.width - minSize, originalSelection.x + dx));
+      cropSelection.width = originalSelection.width - (cropSelection.x - originalSelection.x);
+      break;
+    case "e-resize":
+      cropSelection.width = Math.max(minSize, originalSelection.width + dx);
+      break;
+  }
+
+  // Ensure selection stays within canvas bounds
+  cropSelection.x = Math.max(0, Math.min(cropCanvas.width - cropSelection.width, cropSelection.x));
+  cropSelection.y = Math.max(0, Math.min(cropCanvas.height - cropSelection.height, cropSelection.y));
+  cropSelection.width = Math.min(cropSelection.width, cropCanvas.width - cropSelection.x);
+  cropSelection.height = Math.min(cropSelection.height, cropCanvas.height - cropSelection.y);
+}
+
+// Reset crop to original
+function resetCrop() {
+  const size = Math.min(cropCanvas.width, cropCanvas.height) * 0.6;
+  cropSelection = {
+    x: (cropCanvas.width - size) / 2,
+    y: (cropCanvas.height - size) / 2,
+    width: size,
+    height: size,
+  };
+  updateCropOverlay();
+}
+
+// Fit to square
+function fitToSquare() {
+  const size = Math.min(cropSelection.width, cropSelection.height);
+  cropSelection.width = size;
+  cropSelection.height = size;
+  updateCropOverlay();
+}
+
+// Close crop modal
+function closeCropModal() {
+  const modal = document.getElementById("image-crop-modal");
+  modal.classList.add("hidden");
+
+  // Clean up
+  if (cropImage) {
+    URL.revokeObjectURL(cropImage.src);
+  }
+}
+
+// Apply crop
+function applyCrop() {
+  if (!cropImage || !cropCanvas) return;
+
+  // Calculate scale factor
+  const scaleX = cropImage.naturalWidth / cropCanvas.width;
+  const scaleY = cropImage.naturalHeight / cropCanvas.height;
+
+  // Create new canvas for cropped image
+  const croppedCanvas = document.createElement("canvas");
+  const croppedCtx = croppedCanvas.getContext("2d");
+
+  // Set cropped canvas size (square, 400x400 max)
+  const cropSize = Math.min(cropSelection.width * scaleX, cropSelection.height * scaleY);
+  const maxSize = 400;
+  const finalSize = Math.min(cropSize, maxSize);
+
+  croppedCanvas.width = finalSize;
+  croppedCanvas.height = finalSize;
+
+  // Calculate crop coordinates on original image
+  const cropX = cropSelection.x * scaleX;
+  const cropY = cropSelection.y * scaleY;
+  const cropWidth = cropSelection.width * scaleX;
+  const cropHeight = cropSelection.height * scaleY;
+
+  // Center the crop area
+  const offsetX = (cropWidth - finalSize) / 2;
+  const offsetY = (cropHeight - finalSize) / 2;
+
+  // Draw cropped and resized image
+  croppedCtx.drawImage(
+    cropImage,
+    cropX + offsetX,
+    cropY + offsetY,
+    finalSize,
+    finalSize, // source
+    0,
+    0,
+    finalSize,
+    finalSize, // destination
+  );
+
+  // Convert to base64 with compression
+  const compressedBase64 = croppedCanvas.toDataURL("image/jpeg", 0.85);
+
+  // Close modal and resolve
+  closeCropModal();
+  if (window.currentCropCallback) {
+    window.currentCropCallback(compressedBase64);
+  }
 }
 
 // Settings functions
-function saveProfileSettings() {
+async function saveProfileSettings() {
   if (!currentUser) return;
   const newName = document.getElementById("settings-new-name").value.trim();
   const newPass = document.getElementById("settings-new-password").value;
   const newPhotoInput = document.getElementById("settings-new-photo");
+
   let newPhoto = null;
   if (newPhotoInput && newPhotoInput.files[0]) {
-    const reader = new FileReader();
-    reader.onload = function (e) {
-      newPhoto = e.target.result;
-      currentUser.photo = newPhoto;
-      saveProfileSettingsContinue(newName, newPass);
-    };
-    reader.readAsDataURL(newPhotoInput.files[0]);
-    return;
+    try {
+      // Validate and compress image
+      newPhoto = await validateAndCompressImage(newPhotoInput.files[0]);
+    } catch (error) {
+      showToast(error.message, "error");
+      return;
+    }
   }
-  saveProfileSettingsContinue(newName, newPass);
+
+  await saveProfileSettingsContinue(newName, newPass, newPhoto);
 }
 
-async function saveProfileSettingsContinue(newName, newPass) {
-  if (!newName && !newPass && !currentUser.photo) {
+async function saveProfileSettingsContinue(newName, newPass, newPhoto = null) {
+  if (!newName && !newPass && !newPhoto) {
     showToast("Tidak ada perubahan", "info");
     return;
   }
+
+  // Update currentUser object temporarily
+  const originalName = currentUser.name;
+  const originalPassword = currentUser.password;
+  const originalPhoto = currentUser.photo;
+
   if (newName) currentUser.name = newName;
   if (newPass) {
     if (newPass.length < 6) {
       showToast("Password min. 6 karakter", "error");
       return;
     }
-    currentUser.password = hashPw(newPass);
+    currentUser.password = newPass;
   }
+  if (newPhoto) currentUser.photo = newPhoto;
+
   try {
-    const res = await fetch(`http://localhost:3000/api/auth/profile/${currentUser.id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: currentUser.name, password: currentUser.password, photo: currentUser.photo }),
+    const res = await apiCall(`/api/auth/profile/${currentUser.id}`, "PUT", {
+      name: currentUser.name,
+      password: currentUser.password,
+      photo: currentUser.photo,
     });
 
-    if (!res.ok) throw new Error("Gagal update profile di server");
+    if (res && res.error) {
+      throw new Error(res.error);
+    }
 
     saveSession(currentUser);
     updateUserUI(currentUser);
     document.getElementById("settings-new-name").value = "";
     document.getElementById("settings-new-password").value = "";
+    // Reset file input
+    const photoInput = document.getElementById("settings-new-photo");
+    if (photoInput) photoInput.value = "";
     showToast("Profil berhasil diperbarui!");
   } catch (err) {
     console.error(err);
+    // Restore original values
+    currentUser.name = originalName;
+    currentUser.password = originalPassword;
+    currentUser.photo = originalPhoto;
+    showToast("Gagal update profile: " + (err.error || err.message || "Server error"), "error");
   }
 }
 
 async function resetUserData() {
   if (!confirm("Yakin reset semua data di database? Aksi ini akan menghapus data permanen!")) return;
 
+  const confirmPw = prompt("Masukkan password reset untuk konfirmasi:");
+  if (!confirmPw) return;
+
   try {
-    // 1. Tembak API Reset di backend untuk mengosongkan MySQL
-    const response = await fetch("http://localhost:3000/api/reset", {
-      method: "DELETE",
-    });
+    await apiCall("/api/reset", "DELETE", { confirmPassword: confirmPw });
 
-    if (!response.ok) throw new Error("Gagal mereset database server");
-
-    // 2. Kosongkan juga array dan memori lokal (localStorage backup)
+    // Kosongkan array di memori
     transactions = [];
     goals = [];
     bills = [];
     shifts = [];
     tasks = [];
-    saveAll();
+    debts = [];
+    budgets = [];
+    recurring = [];
 
-    // 3. Render ulang semua UI agar layarnya kembali kosong
+    // Render ulang semua UI
     updateDashboard();
     renderPemasukan();
     renderPengeluaran();
@@ -279,23 +546,26 @@ async function resetUserData() {
     showToast("Semua data berhasil direset permanen!");
   } catch (error) {
     console.error("Error saat reset data:", error);
-    showToast("Gagal mereset data", "error");
+    showToast("Gagal mereset data: " + (error.error || "Server error"), "error");
   }
 }
 
 async function deleteAccount() {
   if (!confirm(`Yakin hapus akun "${currentUser.name}"? SEMUA data akan hilang permanen!`)) return;
 
-  try {
-    await fetch(`http://localhost:3000/api/auth/${currentUser.id}`, { method: "DELETE" });
-    await fetch("http://localhost:3000/api/reset", { method: "DELETE" }); // Opsional: Kosongkan transaksi juga
+  const confirmPw = prompt("Masukkan password reset untuk menghapus semua data:");
+  if (!confirmPw) return;
 
-    ["budget_transactions", "budget_goals", "budget_bills", "budget_shifts"].forEach((k) => localStorage.removeItem(userKey(k)));
+  try {
+    await apiCall(`/api/auth/${currentUser.id}`, "DELETE");
+    await apiCall("/api/reset", "DELETE", { confirmPassword: confirmPw });
     clearSession();
+    localStorage.removeItem("auth_token");
     document.getElementById("auth-screen").classList.remove("hidden");
     showToast("Akun berhasil dihapus dari database", "info");
   } catch (err) {
     console.error(err);
+    showToast("Gagal menghapus akun: " + (err.error || "Server error"), "error");
   }
 }
 
@@ -308,61 +578,61 @@ function toggleTheme() {
   if (themeText) themeText.textContent = isDark ? "Light" : "Dark";
 }
 
+// Profile dropdown toggle
+function toggleProfileDropdown() {
+  const dropdown = document.getElementById("profile-dropdown");
+  if (dropdown) {
+    dropdown.classList.toggle("hidden");
+  }
+}
+
+// Close dropdown when clicking outside
+document.addEventListener("click", (e) => {
+  const dropdown = document.getElementById("profile-dropdown");
+  const btn = document.getElementById("profile-dropdown-btn");
+  if (dropdown && btn && !btn.contains(e.target) && !dropdown.contains(e.target)) {
+    dropdown.classList.add("hidden");
+  }
+});
+
 // =====================================================================
 // DATA LAYER — per-user localStorage keys
 // =====================================================================
-let transactions = [],
-  goals = [],
-  bills = [],
-  shifts = [],
-  tasks = [],
-  categories = [],
-  recurring = [],
-  debts = [],
-  budgets = [],
-  assets = [];
+
 
 function userKey(k) {
   return currentUser ? `u_${currentUser.id}_${k}` : k;
 }
 
-let currentShiftViewDate = new Date();
+// Kategori default jika user sudah dipindahkan ke global state di atas
+// (DEFAULT_CATEGORIES dipindahkan ke top-level)
 
 function loadUserData() {
-  transactions = JSON.parse(localStorage.getItem(userKey("budget_transactions"))) || [];
-  goals = JSON.parse(localStorage.getItem(userKey("budget_goals"))) || [];
-  bills = JSON.parse(localStorage.getItem(userKey("budget_bills"))) || [];
-  shifts = JSON.parse(localStorage.getItem(userKey("budget_shifts"))) || [];
-  tasks = []; // Tasks diambil dari database via getTasksFromDB()
-  categories = JSON.parse(localStorage.getItem(userKey("budget_categories"))) || [
-    { name: "Makanan & Minuman", color: "#f97316" },
-    { name: "Transportasi", color: "#0ea5e9" },
-    { name: "Keperluan Kucing", color: "#eab308" },
-    { name: "Belanja", color: "#ec4899" },
-    { name: "Hiburan", color: "#a855f7" },
-    { name: "Tagihan", color: "#f43f5e" },
-    { name: "Gaji", color: "#99dd04" },
-    { name: "Bonus", color: "#f59e0b" },
-    { name: "Investasi", color: "#10b981" },
-  ];
-  recurring = JSON.parse(localStorage.getItem(userKey("budget_recurring"))) || [];
-  debts = JSON.parse(localStorage.getItem(userKey("budget_debts"))) || [];
-  budgets = JSON.parse(localStorage.getItem(userKey("budget_budgets"))) || [];
-  assets = JSON.parse(localStorage.getItem(userKey("budget_assets"))) || [];
-
-  // User explicitly wants it to default to the current real world month
+  // Semua data di-inisialisasi kosong — diisi dari database via get*FromDB()
+  transactions = [];
+  goals = [];
+  bills = [];
+  shifts = [];
+  tasks = [];
+  categories = [...DEFAULT_CATEGORIES];
+  recurring = [];
+  debts = [];
+  budgets = [];
+  assets = [];
   currentShiftViewDate = new Date();
-}
 
+  // Reset visual stat task agar tidak menampilkan nilai statis dari template
+  ["task-stat-total", "task-stat-completed", "task-stat-progress", "task-stat-pending"].forEach((id) => {
+    const elem = document.getElementById(id);
+    if (elem) elem.textContent = "0";
+  });
+
+  if (typeof renderTasks === "function") renderTasks();
+  if (typeof renderDashboardTasks === "function") renderDashboardTasks();
+}
+// saveAll tidak lagi menyimpan ke localStorage — semua data dikelola via API
 function saveAll() {
-  localStorage.setItem(userKey("budget_transactions"), JSON.stringify(transactions));
-  localStorage.setItem(userKey("budget_goals"), JSON.stringify(goals));
-  localStorage.setItem(userKey("budget_bills"), JSON.stringify(bills));
-  localStorage.setItem(userKey("budget_shifts"), JSON.stringify(shifts));
-  // tasks tidak disimpan ke localStorage (pakai database)
-  localStorage.setItem(userKey("budget_categories"), JSON.stringify(categories));
-  localStorage.setItem(userKey("budget_recurring"), JSON.stringify(recurring));
-  localStorage.setItem(userKey("budget_budgets"), JSON.stringify(budgets));
+  /* no-op: semua data disimpan langsung via API */
 }
 
 // =====================================================================
@@ -500,7 +770,7 @@ function showToast(msg, type = "success") {
 // =====================================================================
 // DASHBOARD
 // =====================================================================
-let isBalanceHidden = localStorage.getItem("budget_balance_hidden") === "true";
+// (isBalanceHidden dipindahkan ke top-level)
 
 function toggleBalanceVisibility() {
   isBalanceHidden = !isBalanceHidden;
@@ -614,11 +884,9 @@ function renderDashboardGoals() {
     .join("");
 }
 
-let spendingFlowPeriod = "monthly";
-let spendingFlowCustomStart = "";
-let spendingFlowCustomEnd = "";
+// (spendingFlowPeriod, spendingFlowCustomStart, spendingFlowCustomEnd dipindahkan ke top-level)
 
-let spendingFlowChartInstance = null;
+
 function renderSpendingFlowChart() {
   const canvas = document.getElementById("spending-flow-chart-canvas");
   const totalEl = document.getElementById("spending-flow-total");
@@ -762,10 +1030,8 @@ function renderSpendingFlowChart() {
   }
 }
 
-let categoryChartInstance = null;
-let catFlowPeriod = "monthly";
-let catFlowCustomStart = "";
-let catFlowCustomEnd = "";
+
+// (catFlowPeriod, catFlowCustomStart, catFlowCustomEnd dipindahkan ke top-level)
 
 function renderCategoryPieChart() {
   const canvas = document.getElementById("category-pie-chart");
@@ -941,8 +1207,7 @@ function updatePaginationUI(idPrefix, totalPages, currentPage, setPageCallback) 
 // =====================================================================
 // PEMASUKAN
 // =====================================================================
-let currentPemasukanPage = 1;
-const TX_PER_PAGE = 10;
+// (currentPemasukanPage, TX_PER_PAGE dipindahkan ke top-level)
 
 function renderPemasukan() {
   const tbody = document.getElementById("pemasukan-history");
@@ -999,10 +1264,13 @@ function renderCategoriesDropdown() {
 
   const listContainer = document.getElementById("custom-categories-list");
   if (listContainer) {
-    if (categories.length === 0) {
-      listContainer.innerHTML = `<p class="text-xs text-slate-500 text-center py-2">Belum ada kategori</p>`;
+    // Hanya tampilkan custom categories (yang memiliki id dari database)
+    const customCategories = categories.filter((c) => c.id);
+
+    if (customCategories.length === 0) {
+      listContainer.innerHTML = `<p class="text-xs text-slate-500 text-center py-2">Belum ada kategori custom</p>`;
     } else {
-      listContainer.innerHTML = categories
+      listContainer.innerHTML = customCategories
         .map(
           (c) => `
         <div class="flex items-center justify-between p-2 rounded-lg bg-white dark:bg-slate-800 border border-light-border dark:border-dark-border shadow-sm">
@@ -1010,7 +1278,7 @@ function renderCategoriesDropdown() {
              <span class="w-4 h-4 rounded-full block border border-black/10 dark:border-white/10 shrink-0" style="background-color: ${c.color}"></span>
              <span class="text-xs font-semibold text-slate-700 dark:text-slate-300 truncate">${c.name}</span>
           </div>
-          <button onclick="deleteCustomCategory('${c.name}')" class="text-rose-500 hover:text-rose-700 p-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-colors shrink-0">
+          <button onclick="window.deleteCustomCategoryUI(${c.id}, '${c.name}')" class="text-rose-500 hover:text-rose-700 p-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-colors shrink-0">
             <i class="ph ph-trash max-w-none"></i>
           </button>
         </div>`,
@@ -1020,15 +1288,14 @@ function renderCategoriesDropdown() {
   }
 }
 
-window.deleteCustomCategory = (name) => {
-  if (!confirm(`Hapus kategori "${name}"?`)) return;
-  categories = categories.filter((c) => c.name !== name);
-  saveAll();
-  renderCategoriesDropdown();
-  showToast(`Kategori "${name}" dihapus`);
+// ==========================================
+// WINDOW-EXPOSED FUNCTIONS UNTUK CATEGORIES
+// ==========================================
+window.deleteCustomCategoryUI = (categoryId, categoryName) => {
+  deleteCustomCategoryFromDB(categoryId, categoryName);
 };
 
-window.addCustomCategory = () => {
+window.addCustomCategory = async () => {
   const nameInput = document.getElementById("input-new-category-name");
   const colorInput = document.getElementById("input-new-category-color");
   if (!nameInput || !colorInput) return;
@@ -1046,11 +1313,9 @@ window.addCustomCategory = () => {
     return;
   }
 
-  categories.push({ name, color });
-  saveAll();
-  renderCategoriesDropdown();
+  // Call async function to add to database
+  await addCustomCategoryToDB(name, color);
   nameInput.value = "";
-  showToast(`Kategori "${name}" ditambahkan`);
 };
 
 window.showCategoryModal = () => {
@@ -1077,7 +1342,7 @@ window.closeCategoryModal = () => {
 // =====================================================================
 // PENGELUARAN
 // =====================================================================
-let currentPengeluaranPage = 1;
+// (currentPengeluaranPage dipindahkan ke top-level)
 
 function renderPengeluaran() {
   const tbody = document.getElementById("pengeluaran-history");
@@ -1124,15 +1389,7 @@ async function deleteTransaction(id) {
 
   try {
     // Tembak rute DELETE di server.js beserta ID transaksinya
-    const response = await fetch(`${API_URL}/${id}`, {
-      method: "DELETE",
-    });
-
-    if (!response.ok) {
-      throw new Error("Gagal menghapus data di server");
-    }
-
-    const result = await response.json();
+    const result = await apiCall(`/api/transactions/${id}`, "DELETE");
     console.log("Respon server:", result.message);
 
     // Tampilkan notifikasi sukses di layar
@@ -1219,7 +1476,7 @@ function renderGoals() {
         </div>
         <h3 class="font-bold text-lg text-slate-900 dark:text-white mb-1">${g.name}</h3>
         <p class="text-xs text-slate-500 mb-6 font-medium bg-slate-100 dark:bg-slate-800 w-fit px-2.5 py-1 rounded-lg">${deadlineText}</p>
-        
+
         <div class="mb-2 flex justify-between items-end">
             <h4 class="text-2xl font-bold text-slate-900 dark:text-white">${formatCurrency(g.saved)}</h4>
             <span class="text-sm text-slate-500">/ ${formatCurrency(g.target)}</span>
@@ -1230,7 +1487,7 @@ function renderGoals() {
         <div class="flex justify-between items-center">
            <p class="text-xs font-bold text-${g.color}-600 dark:text-${g.color}-400">${pct}% Tercapai</p>
         </div>
-        
+
         <div class="flex-1"></div> ${aiHint}
     </div>`;
     })
@@ -1343,10 +1600,11 @@ function renderDashboardTasks() {
   if (!el) return;
 
   // Filter task yang belum selesai, urutkan (progress di atas pending), lalu ambil 3 teratas
-  const activeTasks = tasks.filter(t => t.status !== 'completed')
+  const activeTasks = tasks
+    .filter((t) => t.status !== "completed")
     .sort((a, b) => {
-      if (a.status === 'progress' && b.status === 'pending') return -1;
-      if (a.status === 'pending' && b.status === 'progress') return 1;
+      if (a.status === "progress" && b.status === "pending") return -1;
+      if (a.status === "pending" && b.status === "progress") return 1;
       return b.id < a.id ? -1 : 1;
     })
     .slice(0, 3);
@@ -1359,15 +1617,17 @@ function renderDashboardTasks() {
   const icons = { progress: "spinner-gap", pending: "clock" };
   const colors = { progress: "sky", pending: "amber" };
 
-  el.innerHTML = activeTasks.map(t => `
+  el.innerHTML = activeTasks
+    .map(
+      (t) => `
     <div class="flex items-center gap-3 p-3 bg-white dark:bg-dark-surface border border-light-border dark:border-dark-border rounded-lg shadow-sm hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer group" onclick="document.querySelector('[data-view=task]').click()">
       <div class="w-10 h-10 rounded-lg bg-${colors[t.status]}-100 dark:bg-${colors[t.status]}-500/20 flex items-center justify-center text-${colors[t.status]}-500 shrink-0 group-hover:scale-110 transition-transform">
-        <i class="ph ph-${icons[t.status]} text-lg ${t.status === 'progress' ? 'animate-spin-slow' : ''}"></i>
+        <i class="ph ph-${icons[t.status]} text-lg ${t.status === "progress" ? "animate-spin-slow" : ""}"></i>
       </div>
       <div class="flex-1 min-w-0">
         <h4 class="text-sm font-semibold text-slate-900 dark:text-white truncate" title="${t.title}">${t.title}</h4>
         <p class="text-xs text-slate-500 flex items-center gap-1 mt-0.5 capitalize">
-           ${t.status === 'progress' ? 'In Progress' : 'Pending'}
+           ${t.status === "progress" ? "In Progress" : "Pending"}
         </p>
       </div>
       <div class="shrink-0 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1376,7 +1636,9 @@ function renderDashboardTasks() {
         </button>
       </div>
     </div>
-  `).join("");
+  `,
+    )
+    .join("");
 }
 
 function markBillPaid(id) {
@@ -1402,14 +1664,6 @@ function deleteBill(id) {
 // =====================================================================
 // SHIFT KERJA
 // =====================================================================
-const SHIFT_TYPES = {
-  Morning: { label: "Morning Shift", color: "emerald", startDefault: "08:00", endDefault: "16:00", normalHours: 8 },
-  Afternoon: { label: "Afternoon Shift", color: "amber", startDefault: "13:00", endDefault: "21:00", normalHours: 8 },
-  Night: { label: "Night Shift", color: "indigo", startDefault: "20:00", endDefault: "04:00", normalHours: 8 },
-  Full: { label: "Full Day", color: "rose", startDefault: "08:00", endDefault: "20:00", normalHours: 12 },
-  Lembur: { label: "Lembur", color: "purple", startDefault: "17:00", endDefault: "21:00", normalHours: 0 },
-  OffDay: { label: "Off Day", color: "slate", startDefault: "00:00", endDefault: "00:00", normalHours: 0 },
-};
 
 function calcShiftHours(start, end) {
   const [sh, sm] = start.split(":").map(Number);
@@ -1418,9 +1672,6 @@ function calcShiftHours(start, end) {
   if (h < 0) h += 24;
   return Math.round(h * 100) / 100;
 }
-
-let currentShiftPage = 1;
-const SHIFTS_PER_PAGE = 5;
 
 function renderShifts() {
   const el = document.getElementById("shifts-list");
@@ -1613,9 +1864,6 @@ function updateShiftSummary() {
   renderShiftLineChart();
 }
 
-let shiftChartPeriod = "daily"; // daily, weekly, monthly
-let shiftChartInstance = null;
-
 // ==========================================
 // 📊 DESAIN GRAFIK SHIFT MODERN & MINIMALIS
 // ==========================================
@@ -1802,7 +2050,7 @@ async function recordShiftAsIncome() {
   try {
     // 2. Loop semua shift yang belum tercatat, lalu tembak API untuk ubah statusnya di DB
     for (const sh of unrecordedShifts) {
-      await fetch(`${SHIFTS_API}/${sh.id}/record`, { method: "PUT" });
+      await apiCall(`/api/shifts/${sh.id}/record`, "PUT");
     }
 
     // 3. Tarik ulang data terbaru dari database agar UI berubah menjadi "Tercatat"
@@ -1827,7 +2075,6 @@ window.changeShiftMonth = (val) => {
 // =====================================================================
 // EXPORT
 // =====================================================================
-let exportPeriod = "weekly";
 
 function exportModal() {
   document.getElementById("export-modal").classList.remove("hidden");
@@ -2012,498 +2259,73 @@ function exportPDF() {
 }
 
 // =====================================================================
-// MAIN DOMContentLoaded
-// =====================================================================
+
+if (typeof fpSort !== 'undefined' && fpSort)
+  fpSort.addEventListener("change", () => {
+    currentPemasukanPage = 1;
+    renderPemasukan();
+  });
+
+const feSearch = document.getElementById("filter-pengeluaran-search");
+if (feSearch)
+  feSearch.addEventListener("input", () => {
+    currentPengeluaranPage = 1;
+    renderPengeluaran();
+  });
+
+const feSort = document.getElementById("filter-pengeluaran-sort");
+if (feSort)
+  feSort.addEventListener("change", () => {
+    currentPengeluaranPage = 1;
+    renderPengeluaran();
+  });
+
+const feCat = document.getElementById("filter-pengeluaran-cat");
+if (feCat)
+  feCat.addEventListener("change", () => {
+    currentPengeluaranPage = 1;
+    renderPengeluaran();
+  });
+// Custom Category Add Event
+const btnAddCat = document.getElementById("btn-add-category");
+if (btnAddCat) {
+  btnAddCat.addEventListener("click", () => {
+    const nameInput = document.getElementById("input-new-category-name");
+    const colorInput = document.getElementById("input-new-category-color");
+    const name = nameInput.value.trim();
+    if (!name) {
+      showToast("Nama kategori tidak boleh kosong", "error");
+      return;
+    }
+    if (categories.find((c) => c.name.toLowerCase() === name.toLowerCase())) {
+      showToast("Kategori sudah ada", "error");
+      return;
+    }
+    categories.push({ name, color: colorInput.value });
+    saveAll();
+    renderCategoriesDropdown();
+    nameInput.value = "";
+    showToast("Kategori berhasil ditambahkan!");
+  });
+}
+
+// Unified Shift Pickers Logic
+function handleShiftMonthChange(e) {
+  if (e.target.value) {
+    currentShiftViewDate = new Date(e.target.value + "-01T00:00:00");
+    updateShiftSummary(); // Recalculates summary, re-renders chart, and calendar can be called here too
+    renderShiftCalendar();
+  }
+}
+
+const shiftLinePicker = document.getElementById("shift-line-chart-picker");
+if (shiftLinePicker) shiftLinePicker.addEventListener("change", handleShiftMonthChange);
+
+const shiftCalendarPicker = document.getElementById("shift-calendar-picker");
+if (shiftCalendarPicker) shiftCalendarPicker.addEventListener("change", handleShiftMonthChange);
+
+// Initial render (only if logged in)
 document.addEventListener("DOMContentLoaded", () => {
-  // Check session
-  if (currentUser) {
-    loadUserData();
-    document.getElementById("auth-screen").classList.add("hidden");
-    updateUserUI(currentUser);
-  }
-
-  // Date
-  const dateEl = document.getElementById("page-date");
-  if (dateEl) dateEl.textContent = new Date().toLocaleDateString("id-ID", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
-
-  const themeBtn = document.getElementById("theme-toggle");
-  const htmlEl = document.documentElement;
-  const themeText = themeBtn ? themeBtn.querySelector(".theme-text") : null;
-  if (localStorage.getItem("theme") === "dark") {
-    htmlEl.classList.add("dark");
-    if (themeText) themeText.textContent = "Light";
-  }
-  themeBtn && themeBtn.addEventListener("click", toggleTheme);
-
-  // Spending Flow Chart Dropdown
-  const spendingFlowDropdown = document.getElementById("spending-flow-dropdown");
-  if (spendingFlowDropdown) {
-    spendingFlowDropdown.addEventListener("change", renderSpendingFlowChart);
-  }
-
-  // Navigation
-  const navItems = document.querySelectorAll(".nav-item");
-  const viewSections = document.querySelectorAll(".view-section");
-  const pageTitle = document.getElementById("page-title");
-  navItems.forEach((item) => {
-    item.addEventListener("click", (e) => {
-      e.preventDefault();
-      navItems.forEach((n) => {
-        n.classList.remove("active");
-        n.classList.add("text-slate-500");
-      });
-      item.classList.add("active");
-      item.classList.remove("text-slate-500");
-      viewSections.forEach((v) => {
-        v.classList.remove("active");
-        v.classList.add("hidden");
-      });
-      const viewName = item.getAttribute("data-view");
-
-      // LAZY LOADING: Panggil fungsi render hanya untuk view yang dibuka
-      if (typeof handleLazyRender === "function") {
-        handleLazyRender(viewName);
-      }
-
-      const sel = document.getElementById(`view-${viewName}`);
-      if (sel) {
-        sel.classList.remove("hidden");
-        sel.classList.add("active");
-        sel.classList.remove("animate-fade-in");
-        void sel.offsetWidth;
-        sel.classList.add("animate-fade-in");
-      }
-      if (pageTitle) pageTitle.textContent = item.querySelector("span").textContent;
-      const ca = document.getElementById("content-area");
-      if (ca) ca.scrollTop = 0;
-      // close mobile menu
-      const sidebar = document.querySelector("aside");
-      if (window.innerWidth < 768 && sidebar && !sidebar.classList.contains("hidden")) toggleMobileMenu(false);
-    });
-  });
-
-  // Mobile Menu
-  const mobileBtn = document.getElementById("mobile-menu-btn");
-  const desktopBtn = document.getElementById("desktop-menu-btn");
-  const sidebar = document.querySelector("aside");
-  const overlay = document.getElementById("mobile-overlay");
-
-  function toggleMobileMenu(show) {
-    if (!sidebar || !overlay) return;
-    if (show) {
-      sidebar.classList.remove("hidden");
-      sidebar.classList.add("fixed", "inset-y-0", "left-0", "z-50", "w-64");
-      overlay.classList.remove("hidden");
-      requestAnimationFrame(() => {
-        overlay.classList.remove("opacity-0");
-        overlay.classList.add("opacity-100");
-      });
-    } else {
-      overlay.classList.remove("opacity-100");
-      overlay.classList.add("opacity-0");
-      setTimeout(() => {
-        sidebar.classList.add("hidden");
-        sidebar.classList.remove("fixed", "inset-y-0", "left-0", "z-50", "w-64");
-        overlay.classList.add("hidden");
-      }, 300);
-    }
-  }
-  if (mobileBtn) mobileBtn.addEventListener("click", () => toggleMobileMenu(true));
-  if (overlay) overlay.addEventListener("click", () => toggleMobileMenu(false));
-  if (desktopBtn)
-    desktopBtn.addEventListener("click", () => {
-      if (sidebar) {
-        sidebar.classList.toggle("w-64");
-        sidebar.classList.toggle("w-20");
-        document.querySelectorAll(".sidebar-text").forEach((el) => el.classList.toggle("hidden"));
-
-        document.querySelectorAll("#sidebar-desktop .nav-item").forEach((el) => {
-          el.classList.toggle("px-4");
-          el.classList.toggle("justify-center");
-        });
-
-        const exportBtn = document.querySelector("#sidebar-desktop button");
-        if (exportBtn) {
-          exportBtn.classList.toggle("px-4");
-          exportBtn.classList.toggle("justify-center");
-        }
-
-        const logoDiv = document.querySelector("#sidebar-desktop .h-16");
-        if (logoDiv) {
-          logoDiv.classList.toggle("px-6");
-          logoDiv.classList.toggle("justify-center");
-        }
-      }
-    });
-
-  // Form Pemasukan
-  const formPemasukan = document.getElementById("form-pemasukan");
-  if (formPemasukan)
-    formPemasukan.addEventListener("submit", (e) => {
-      e.preventDefault();
-
-      const descEl = document.getElementById("input-pemasukan-judul");
-      const desc = descEl ? descEl.value.trim() : "Pemasukan";
-
-      const amountEl = document.getElementById("input-pemasukan-jumlah");
-      const amount = amountEl ? parseFloat(amountEl.value) : 0;
-
-      const dateEl = document.getElementById("input-pemasukan-tanggal");
-      const date = dateEl ? dateEl.value : new Date().toISOString().split("T")[0];
-
-      const categoryEl = document.getElementById("input-pemasukan-sumber");
-      const category = categoryEl ? categoryEl.value : "Lainnya";
-
-      if (!desc) {
-        showToast("Judul tidak boleh kosong", "error");
-        return;
-      }
-      if (!amount || amount <= 0) {
-        showToast("Jumlah harus > 0", "error");
-        return;
-      }
-
-      // 1. Kirim data ke MySQL (Secara eksplisit ditaruh 'false' agar Toast muncul)
-      saveTransactionToDB("income", amount, category, date, desc, false);
-
-      // 2. Bersihkan dan tutup form
-      formPemasukan.reset();
-      document.getElementById("input-pemasukan-tanggal").value = new Date().toISOString().split("T")[0];
-      const formSection = document.getElementById("pemasukan-form-section");
-      if (formSection) formSection.classList.add("hidden");
-    });
-
-  // Form Pengeluaran
-  const formPengeluaran = document.getElementById("form-pengeluaran");
-  if (formPengeluaran)
-    formPengeluaran.addEventListener("submit", (e) => {
-      e.preventDefault();
-      const title = document.getElementById("input-pengeluaran-judul").value.trim();
-      const amount = parseInt(document.getElementById("input-pengeluaran-jumlah").value);
-      const category = document.getElementById("input-pengeluaran-kategori").value;
-      const dateVal = document.getElementById("input-pengeluaran-tanggal").value;
-
-      if (!title) {
-        showToast("Judul tidak boleh kosong", "error");
-        return;
-      }
-      if (!amount || amount <= 0) {
-        showToast("Jumlah harus > 0", "error");
-        return;
-      }
-
-      // 1. Kirim data ke MySQL (Secara eksplisit kita taruh 'false' di paling belakang agar toast PASTI MUNCUL) 👇
-      saveTransactionToDB("expense", amount, category, dateVal || new Date().toISOString().split("T")[0], title, false);
-
-      // 2. Bersihkan form
-      formPengeluaran.reset();
-      document.getElementById("input-pengeluaran-tanggal").value = new Date().toISOString().split("T")[0];
-      document.getElementById("pengeluaran-form-section").classList.add("hidden");
-    });
-
-  // Form Goal
-  const formGoal = document.getElementById("form-goal");
-  if (formGoal)
-    formGoal.addEventListener("submit", (e) => {
-      e.preventDefault();
-      const name = document.getElementById("input-goal-name").value.trim();
-      const target = parseInt(document.getElementById("input-goal-target").value);
-      const saved = parseInt(document.getElementById("input-goal-saved").value) || 0;
-      const deadline = document.getElementById("input-goal-deadline").value;
-      const color = document.getElementById("input-goal-color").value;
-      const icon = document.getElementById("input-goal-icon").value;
-
-      if (!name) {
-        showToast("Nama goal tidak boleh kosong", "error");
-        return;
-      }
-      if (!target || target <= 0) {
-        showToast("Target harus > 0", "error");
-        return;
-      }
-
-      // Kirim ke MySQL
-      saveGoalToDB(name, target, saved, deadline, color, icon);
-
-      formGoal.reset();
-      document.getElementById("goal-form-section").classList.add("hidden");
-      showToast("Goal berhasil ditambahkan ke database!");
-    });
-
-  // Form Bill
-  const formBill = document.getElementById("form-bill");
-  if (formBill)
-    formBill.addEventListener("submit", (e) => {
-      e.preventDefault();
-      const name = document.getElementById("input-bill-name").value.trim();
-      const amount = parseInt(document.getElementById("input-bill-amount").value);
-      const dueDate = document.getElementById("input-bill-duedate").value;
-      const category = document.getElementById("input-bill-category").value;
-
-      if (!name) {
-        showToast("Nama tagihan tidak boleh kosong", "error");
-        return;
-      }
-      if (!amount || amount <= 0) {
-        showToast("Jumlah harus > 0", "error");
-        return;
-      }
-      if (!dueDate) {
-        showToast("Tanggal jatuh tempo WAJIB diisi!", "error");
-        return;
-      }
-
-      // Kirim ke MySQL (status paid default false/0)
-      saveBillToDB(name, amount, dueDate, category, false);
-
-      formBill.reset();
-      document.getElementById("bill-form-section").classList.add("hidden");
-      showToast("Tagihan berhasil ditambahkan ke database!");
-    });
-
-  // Form Shift
-  const formShift = document.getElementById("form-shift");
-  if (formShift) {
-    const shiftTypeSelect = document.getElementById("input-shift-type");
-    shiftTypeSelect &&
-      shiftTypeSelect.addEventListener("change", () => {
-        const t = SHIFT_TYPES[shiftTypeSelect.value];
-        if (!t) return;
-        document.getElementById("input-shift-start").value = t.startDefault;
-        document.getElementById("input-shift-end").value = t.endDefault;
-        const nhEl = document.getElementById("input-shift-normal-hours");
-        if (nhEl) nhEl.value = t.normalHours;
-        const isOff = shiftTypeSelect.value === "OffDay";
-        ["input-shift-start", "input-shift-end", "input-shift-rate", "input-shift-normal-hours"].forEach((id) => {
-          const el = document.getElementById(id);
-          if (el) el.disabled = isOff;
-        });
-      });
-
-    formShift.addEventListener("submit", (e) => {
-      e.preventDefault();
-      const date = document.getElementById("input-shift-date").value;
-      const type = document.getElementById("input-shift-type").value;
-      const startTime = document.getElementById("input-shift-start").value;
-      const endTime = document.getElementById("input-shift-end").value;
-      const normalHrsInput = parseFloat(document.getElementById("input-shift-normal-hours").value) || 0;
-      const hourlyRate = parseInt(document.getElementById("input-shift-rate").value) || 0;
-      const otRateInput = parseInt(document.getElementById("input-shift-ot-rate").value) || 0;
-
-      const isOff = type === "OffDay";
-      const isLembur = type === "Lembur";
-      let hours = 0,
-        normalHoursWorked = 0,
-        overtimeHours = 0,
-        earnings = 0;
-
-      if (!isOff) {
-        hours = calcShiftHours(startTime, endTime);
-        if (isLembur) {
-          normalHoursWorked = 0;
-          overtimeHours = hours;
-        } else {
-          normalHoursWorked = Math.min(hours, normalHrsInput);
-          overtimeHours = Math.max(0, hours - normalHrsInput);
-        }
-        const otRate = otRateInput > 0 ? otRateInput : Math.round(hourlyRate * 1.5);
-        earnings = Math.round(normalHoursWorked * hourlyRate + overtimeHours * otRate);
-      }
-
-      // Kirim data ke MySQL
-      saveShiftToDB({
-        date,
-        type,
-        startTime,
-        endTime,
-        hours,
-        normalHoursWorked,
-        overtimeHours,
-        hourlyRate,
-        earnings,
-      });
-
-      formShift.reset();
-      document.getElementById("shift-form-section").classList.add("hidden");
-      document.getElementById("input-shift-date").value = new Date().toISOString().split("T")[0];
-      document.getElementById("input-shift-start").value = "08:00";
-      document.getElementById("input-shift-end").value = "16:00";
-      const nhEl2 = document.getElementById("input-shift-normal-hours");
-      if (nhEl2) nhEl2.value = "8";
-
-      ["input-shift-start", "input-shift-end", "input-shift-rate", "input-shift-normal-hours"].forEach((id) => {
-        const el = document.getElementById(id);
-        if (el) el.disabled = false;
-      });
-
-      showToast("Shift berhasil disimpan...");
-    });
-  }
-  const btnAddShiftTop = document.getElementById("btn-add-shift-top");
-
-  // Tombol Toggle Form Pemasukan
-  const btnTogglePemasukan = document.getElementById("btn-toggle-pemasukan-form");
-  const formSectionPemasukan = document.getElementById("pemasukan-form-section");
-  const btnCancelPemasukan = document.getElementById("btn-cancel-pemasukan");
-
-  if (btnTogglePemasukan && formSectionPemasukan) {
-    btnTogglePemasukan.addEventListener("click", () => {
-      formSectionPemasukan.classList.toggle("hidden");
-      if (!formSectionPemasukan.classList.contains("hidden")) {
-        formSectionPemasukan.scrollIntoView({ behavior: "smooth" });
-      }
-    });
-  }
-
-  if (btnCancelPemasukan && formSectionPemasukan) {
-    btnCancelPemasukan.addEventListener("click", () => {
-      formSectionPemasukan.classList.add("hidden");
-    });
-  }
-
-  // Tombol Toggle Form Pengeluaran
-  const btnTogglePengeluaran = document.getElementById("btn-toggle-pengeluaran-form");
-  const formSectionPengeluaran = document.getElementById("pengeluaran-form-section");
-  const btnCancelPengeluaran = document.getElementById("btn-cancel-pengeluaran");
-
-  if (btnTogglePengeluaran && formSectionPengeluaran) {
-    btnTogglePengeluaran.addEventListener("click", () => {
-      formSectionPengeluaran.classList.toggle("hidden");
-      if (!formSectionPengeluaran.classList.contains("hidden")) {
-        formSectionPengeluaran.scrollIntoView({ behavior: "smooth" });
-      }
-    });
-  }
-
-  if (btnCancelPengeluaran && formSectionPengeluaran) {
-    btnCancelPengeluaran.addEventListener("click", () => {
-      formSectionPengeluaran.classList.add("hidden");
-    });
-  }
-
-  // Tombol Toggle Form Bills (Tagihan)
-  const btnAddBillTop = document.getElementById("btn-add-bill-top");
-  if (btnAddBillTop)
-    btnAddBillTop.addEventListener("click", () => {
-      const s = document.getElementById("bill-form-section");
-      s.classList.toggle("hidden");
-      if (!s.classList.contains("hidden")) s.scrollIntoView({ behavior: "smooth" });
-    });
-  const btnCancelBill = document.getElementById("btn-cancel-bill");
-  if (btnCancelBill) btnCancelBill.addEventListener("click", () => document.getElementById("bill-form-section").classList.add("hidden"));
-
-  // Tombol Toggle Form Goals (Target)
-  const btnAddGoalTop = document.getElementById("btn-add-goal-top");
-  if (btnAddGoalTop)
-    btnAddGoalTop.addEventListener("click", () => {
-      const s = document.getElementById("goal-form-section");
-      s.classList.toggle("hidden");
-      if (!s.classList.contains("hidden")) s.scrollIntoView({ behavior: "smooth" });
-    });
-  const btnCancelGoal = document.getElementById("btn-cancel-goal");
-  if (btnCancelGoal) btnCancelGoal.addEventListener("click", () => document.getElementById("goal-form-section").classList.add("hidden"));
-  if (btnAddShiftTop)
-    btnAddShiftTop.addEventListener("click", () => {
-      const s = document.getElementById("shift-form-section");
-      s.classList.toggle("hidden");
-      if (!s.classList.contains("hidden")) s.scrollIntoView({ behavior: "smooth" });
-    });
-  const btnCancelShift = document.getElementById("btn-cancel-shift");
-  if (btnCancelShift) btnCancelShift.addEventListener("click", () => document.getElementById("shift-form-section").classList.add("hidden"));
-  const btnRecordShift = document.getElementById("btn-record-shift-income");
-  if (btnRecordShift) btnRecordShift.addEventListener("click", recordShiftAsIncome);
-
-  // Quick Actions
-  const quickIncome = document.getElementById("quick-income");
-  const quickExpense = document.getElementById("quick-expense");
-  if (quickIncome) quickIncome.addEventListener("click", () => document.querySelector('[data-view="pemasukan"]').click());
-  if (quickExpense) quickExpense.addEventListener("click", () => document.querySelector('[data-view="pengeluaran"]').click());
-
-  // FAB
-  const fab = document.getElementById("fab-add");
-  if (fab) fab.addEventListener("click", () => document.querySelector('[data-view="pemasukan"]').click());
-
-  // Default dates
-  const todayStr = new Date().toISOString().split("T")[0];
-  ["input-pemasukan-tanggal", "input-pengeluaran-tanggal", "input-shift-date"].forEach((id) => {
-    const el = document.getElementById(id);
-    if (el) el.value = todayStr;
-  });
-
-  // Filters (reset page to 1 when filters change)
-  const fpSearch = document.getElementById("filter-pemasukan-search");
-  if (fpSearch)
-    fpSearch.addEventListener("input", () => {
-      currentPemasukanPage = 1;
-      renderPemasukan();
-    });
-
-  const fpSort = document.getElementById("filter-pemasukan-sort");
-  if (fpSort)
-    fpSort.addEventListener("change", () => {
-      currentPemasukanPage = 1;
-      renderPemasukan();
-    });
-
-  const feSearch = document.getElementById("filter-pengeluaran-search");
-  if (feSearch)
-    feSearch.addEventListener("input", () => {
-      currentPengeluaranPage = 1;
-      renderPengeluaran();
-    });
-
-  const feSort = document.getElementById("filter-pengeluaran-sort");
-  if (feSort)
-    feSort.addEventListener("change", () => {
-      currentPengeluaranPage = 1;
-      renderPengeluaran();
-    });
-
-  const feCat = document.getElementById("filter-pengeluaran-cat");
-  if (feCat)
-    feCat.addEventListener("change", () => {
-      currentPengeluaranPage = 1;
-      renderPengeluaran();
-    });
-  // Custom Category Add Event
-  const btnAddCat = document.getElementById("btn-add-category");
-  if (btnAddCat) {
-    btnAddCat.addEventListener("click", () => {
-      const nameInput = document.getElementById("input-new-category-name");
-      const colorInput = document.getElementById("input-new-category-color");
-      const name = nameInput.value.trim();
-      if (!name) {
-        showToast("Nama kategori tidak boleh kosong", "error");
-        return;
-      }
-      if (categories.find((c) => c.name.toLowerCase() === name.toLowerCase())) {
-        showToast("Kategori sudah ada", "error");
-        return;
-      }
-      categories.push({ name, color: colorInput.value });
-      saveAll();
-      renderCategoriesDropdown();
-      nameInput.value = "";
-      showToast("Kategori berhasil ditambahkan!");
-    });
-  }
-
-  // Unified Shift Pickers Logic
-  function handleShiftMonthChange(e) {
-    if (e.target.value) {
-      currentShiftViewDate = new Date(e.target.value + "-01T00:00:00");
-      updateShiftSummary(); // Recalculates summary, re-renders chart, and calendar can be called here too
-      renderShiftCalendar();
-    }
-  }
-
-  const shiftLinePicker = document.getElementById("shift-line-chart-picker");
-  if (shiftLinePicker) shiftLinePicker.addEventListener("change", handleShiftMonthChange);
-
-  const shiftCalendarPicker = document.getElementById("shift-calendar-picker");
-  if (shiftCalendarPicker) shiftCalendarPicker.addEventListener("change", handleShiftMonthChange);
-
-  // Initial render (only if logged in)
   if (currentUser) {
     renderCategoriesDropdown();
     checkRecurringTransactions();
@@ -2516,136 +2338,126 @@ document.addEventListener("DOMContentLoaded", () => {
     renderTasks();
     renderRecurringList();
   }
+});
 
-  // --- Recurring Transactions Setup --- //
-  const formReq = document.getElementById("form-recurring");
-  if (formReq) {
-    formReq.addEventListener("submit", (e) => {
-      e.preventDefault();
-      const name = document.getElementById("input-req-name").value.trim();
-      const amount = parseInt(document.getElementById("input-req-amount").value);
-      const type = document.getElementById("input-req-type").value;
-      const category = document.getElementById("input-req-category").value;
-      const date = parseInt(document.getElementById("input-req-date").value);
+// --- Recurring Transactions Setup --- //
+const formReq = document.getElementById("form-recurring");
+if (formReq) {
+  formReq.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const name = document.getElementById("input-req-name").value.trim();
+    const amount = parseInt(document.getElementById("input-req-amount").value);
+    const type = document.getElementById("input-req-type").value;
+    const category = document.getElementById("input-req-category").value;
+    const date = parseInt(document.getElementById("input-req-date").value);
 
-      if (!name) {
-        showToast("Nama tagihan rutin harus diisi", "error");
-        return;
-      }
-      if (!amount || amount <= 0) {
-        showToast("Jumlah harus > 0", "error");
-        return;
-      }
-      if (!date || date < 1 || date > 31) {
-        showToast("Tanggal jatuh tempo (1-31) tidak valid", "error");
-        return;
-      }
+    if (!name) {
+      showToast("Nama tagihan rutin harus diisi", "error");
+      return;
+    }
+    if (!amount || amount <= 0) {
+      showToast("Jumlah harus > 0", "error");
+      return;
+    }
+    if (!date || date < 1 || date > 31) {
+      showToast("Tanggal jatuh tempo (1-31) tidak valid", "error");
+      return;
+    }
 
-      recurring.push({ id: uid(), name, amount, type, category, date, lastProcessedMonth: null });
-      saveAll();
-      formReq.reset();
-      closeRecurringModal();
-      renderRecurringList();
-      showToast("Tagihan rutin berhasil dibuat!");
+    recurring.push({ id: uid(), name, amount, type, category, date, lastProcessedMonth: null });
+    saveAll();
+    formReq.reset();
+    closeRecurringModal();
+    renderRecurringList();
+    showToast("Tagihan rutin berhasil dibuat!");
+  });
+}
+
+// Spending Flow Tabs Logic
+document.querySelectorAll(".spending-flow-tab").forEach((btn) => {
+  btn.addEventListener("click", (e) => {
+    document.querySelectorAll(".spending-flow-tab").forEach((b) => {
+      b.classList.remove("active", "bg-white", "dark:bg-slate-700", "shadow-sm", "text-slate-800", "dark:text-white");
+      b.classList.add("text-slate-500", "dark:text-slate-400");
     });
-  }
+    const t = e.target;
+    t.classList.add("active", "bg-white", "dark:bg-slate-700", "shadow-sm", "text-slate-800", "dark:text-white");
+    t.classList.remove("text-slate-500", "dark:text-slate-400");
 
-  // Spending Flow Tabs Logic
-  document.querySelectorAll(".spending-flow-tab").forEach((btn) => {
-    btn.addEventListener("click", (e) => {
-      document.querySelectorAll(".spending-flow-tab").forEach((b) => {
-        b.classList.remove("active", "bg-white", "dark:bg-slate-700", "shadow-sm", "text-slate-800", "dark:text-white");
-        b.classList.add("text-slate-500", "dark:text-slate-400");
-      });
-      const t = e.target;
-      t.classList.add("active", "bg-white", "dark:bg-slate-700", "shadow-sm", "text-slate-800", "dark:text-white");
-      t.classList.remove("text-slate-500", "dark:text-slate-400");
+    const period = t.getAttribute("data-period");
+    spendingFlowPeriod = period;
 
-      const period = t.getAttribute("data-period");
-      spendingFlowPeriod = period;
+    const customDateEl = document.getElementById("spending-flow-custom-date");
+    if (period === "custom") {
+      customDateEl.classList.remove("hidden");
+    } else {
+      customDateEl.classList.add("hidden");
+      renderSpendingFlowChart();
+    }
+  });
+});
 
-      const customDateEl = document.getElementById("spending-flow-custom-date");
-      if (period === "custom") {
-        customDateEl.classList.remove("hidden");
-      } else {
-        customDateEl.classList.add("hidden");
-        renderSpendingFlowChart();
-      }
-    });
+const flowApplyBtn = document.getElementById("flow-custom-apply");
+if (flowApplyBtn)
+  flowApplyBtn.addEventListener("click", () => {
+    spendingFlowCustomStart = document.getElementById("flow-start-date").value;
+    spendingFlowCustomEnd = document.getElementById("flow-end-date").value;
+    if (spendingFlowCustomStart && spendingFlowCustomEnd) renderSpendingFlowChart();
+    else showToast("Pilih range tanggal terlebih dahulu", "error");
   });
 
-  const flowApplyBtn = document.getElementById("flow-custom-apply");
-  if (flowApplyBtn)
-    flowApplyBtn.addEventListener("click", () => {
-      spendingFlowCustomStart = document.getElementById("flow-start-date").value;
-      spendingFlowCustomEnd = document.getElementById("flow-end-date").value;
-      if (spendingFlowCustomStart && spendingFlowCustomEnd) renderSpendingFlowChart();
-      else showToast("Pilih range tanggal terlebih dahulu", "error");
+// Category Flow Tabs Logic
+document.querySelectorAll(".cat-flow-tab").forEach((btn) => {
+  btn.addEventListener("click", (e) => {
+    document.querySelectorAll(".cat-flow-tab").forEach((b) => {
+      b.classList.remove("active", "bg-white", "dark:bg-slate-700", "shadow-sm", "text-slate-800", "dark:text-white");
+      b.classList.add("text-slate-500", "dark:text-slate-400");
     });
+    const t = e.target;
+    t.classList.add("active", "bg-white", "dark:bg-slate-700", "shadow-sm", "text-slate-800", "dark:text-white");
+    t.classList.remove("text-slate-500", "dark:text-slate-400");
 
-  // Category Flow Tabs Logic
-  document.querySelectorAll(".cat-flow-tab").forEach((btn) => {
-    btn.addEventListener("click", (e) => {
-      document.querySelectorAll(".cat-flow-tab").forEach((b) => {
-        b.classList.remove("active", "bg-white", "dark:bg-slate-700", "shadow-sm", "text-slate-800", "dark:text-white");
-        b.classList.add("text-slate-500", "dark:text-slate-400");
-      });
-      const t = e.target;
-      t.classList.add("active", "bg-white", "dark:bg-slate-700", "shadow-sm", "text-slate-800", "dark:text-white");
-      t.classList.remove("text-slate-500", "dark:text-slate-400");
+    const period = t.getAttribute("data-period");
+    catFlowPeriod = period;
 
-      const period = t.getAttribute("data-period");
-      catFlowPeriod = period;
+    const customDateEl = document.getElementById("cat-custom-date");
+    if (period === "custom") {
+      customDateEl.classList.remove("hidden");
+    } else {
+      customDateEl.classList.add("hidden");
+      renderCategoryPieChart();
+    }
+  });
+});
 
-      const customDateEl = document.getElementById("cat-custom-date");
-      if (period === "custom") {
-        customDateEl.classList.remove("hidden");
-      } else {
-        customDateEl.classList.add("hidden");
-        renderCategoryPieChart();
-      }
-    });
+const catApplyBtn = document.getElementById("cat-custom-apply");
+if (catApplyBtn)
+  catApplyBtn.addEventListener("click", () => {
+    catFlowCustomStart = document.getElementById("cat-start-date").value;
+    catFlowCustomEnd = document.getElementById("cat-end-date").value;
+    if (catFlowCustomStart && catFlowCustomEnd) renderCategoryPieChart();
+    else showToast("Pilih range tanggal terlebih dahulu", "error");
   });
 
-  const catApplyBtn = document.getElementById("cat-custom-apply");
-  if (catApplyBtn)
-    catApplyBtn.addEventListener("click", () => {
-      catFlowCustomStart = document.getElementById("cat-start-date").value;
-      catFlowCustomEnd = document.getElementById("cat-end-date").value;
-      if (catFlowCustomStart && catFlowCustomEnd) renderCategoryPieChart();
-      else showToast("Pilih range tanggal terlebih dahulu", "error");
+// Tab Shift Flow Logic
+document.querySelectorAll(".shift-flow-tab").forEach((btn) => {
+  btn.addEventListener("click", (e) => {
+    document.querySelectorAll(".shift-flow-tab").forEach((b) => {
+      b.classList.remove("active", "bg-white", "dark:bg-slate-700", "shadow-sm", "text-slate-800", "dark:text-white");
+      b.classList.add("text-slate-500", "dark:text-slate-400");
     });
+    const t = e.target;
+    t.classList.add("active", "bg-white", "dark:bg-slate-700", "shadow-sm", "text-slate-800", "dark:text-white");
+    t.classList.remove("text-slate-500", "dark:text-slate-400");
 
-  // Tab Shift Flow Logic
-  document.querySelectorAll(".shift-flow-tab").forEach((btn) => {
-    btn.addEventListener("click", (e) => {
-      document.querySelectorAll(".shift-flow-tab").forEach((b) => {
-        b.classList.remove("active", "bg-white", "dark:bg-slate-700", "shadow-sm", "text-slate-800", "dark:text-white");
-        b.classList.add("text-slate-500", "dark:text-slate-400");
-      });
-      const t = e.target;
-      t.classList.add("active", "bg-white", "dark:bg-slate-700", "shadow-sm", "text-slate-800", "dark:text-white");
-      t.classList.remove("text-slate-500", "dark:text-slate-400");
-
-      shiftChartPeriod = t.getAttribute("data-period");
-      updateShiftSummary(); // Update kartu estimasi dan grafik
-    });
+    shiftChartPeriod = t.getAttribute("data-period");
+    updateShiftSummary(); // Update kartu estimasi dan grafik
   });
 });
 
 // =====================================================================
 // TASK & POMODORO
 // =====================================================================
-let pomoTimer = null;
-let pomoTimeLeft = 25 * 60;
-let isPomoRunning = false;
-let currentPomoMode = "work"; // work, shortBreak, longBreak
-
-const pomoModes = {
-  work: { time: 25 * 60, label: "Work Time", color: "rose" },
-  shortBreak: { time: 5 * 60, label: "Short Break", color: "sky" },
-  longBreak: { time: 15 * 60, label: "Long Break", color: "indigo" },
-};
 
 function formatPomoTime(sec) {
   const m = Math.floor(sec / 60)
@@ -2739,7 +2551,7 @@ function resetPomodoro() {
   updatePomoUI();
 }
 
-let taskChartInstance = null;
+
 // =====================================================================
 // PROJECT PROGRESS OVERVIEW (CHART)
 // =====================================================================
@@ -2800,23 +2612,23 @@ function renderTaskChart() {
 // TASK MANAGER PRO (DENGAN PRIORITAS & DUE DATE)
 // =====================================================================
 function renderTasks() {
-  const container = document.getElementById('task-list');
+  const container = document.getElementById("task-list");
   if (!container) return;
 
   if (!tasks.length) {
     container.innerHTML = `<div class="col-span-full py-12 text-center text-slate-400 border-2 border-dashed border-light-border dark:border-dark-border rounded-3xl"><i class="ph ph-check-square-offset text-5xl block mb-3 opacity-40"></i><p class="text-sm">Hore! Tidak ada tugas yang tertunda.</p></div>`;
-    if (typeof renderTaskChart === 'function') renderTaskChart(); // Kosongkan grafik
+    if (typeof renderTaskChart === "function") renderTaskChart(); // Kosongkan grafik
     return;
   }
 
   // Urutkan: High Priority di atas, lalu berdasarkan status
   const sortedTasks = [...tasks].sort((a, b) => {
-    if (a.status !== 'completed' && b.status === 'completed') return -1;
-    if (a.status === 'completed' && b.status !== 'completed') return 1;
+    if (a.status !== "completed" && b.status === "completed") return -1;
+    if (a.status === "completed" && b.status !== "completed") return 1;
 
     const pWeight = { high: 3, medium: 2, low: 1 };
-    const pA = pWeight[a.priority || 'medium'];
-    const pB = pWeight[b.priority || 'medium'];
+    const pA = pWeight[a.priority || "medium"];
+    const pB = pWeight[b.priority || "medium"];
     if (pA !== pB) return pB - pA;
 
     return b.id < a.id ? -1 : 1;
@@ -2825,95 +2637,107 @@ function renderTasks() {
   const todayDate = new Date();
   todayDate.setHours(0, 0, 0, 0);
 
-  container.innerHTML = sortedTasks.map(t => {
-    const isDone = t.status === 'completed';
-    const isProg = t.status === 'progress';
+  container.innerHTML = sortedTasks
+    .map((t) => {
+      const isDone = t.status === "completed";
+      const isProg = t.status === "progress";
 
-    // Konfigurasi Visual Prioritas
-    const prioConfig = {
-      low: { icon: "ph-arrow-down", color: "emerald", label: "Low", border: "border-l-emerald-400" },
-      medium: { icon: "ph-equals", color: "amber", label: "Med", border: "border-l-amber-400" },
-      high: { icon: "ph-warning-circle", color: "rose", label: "High", border: "border-l-rose-500" }
-    };
-    const prio = prioConfig[t.priority || 'medium'];
+      // Konfigurasi Visual Prioritas
+      const prioConfig = {
+        low: { icon: "ph-arrow-down", color: "emerald", label: "Low", border: "border-l-emerald-400" },
+        medium: { icon: "ph-equals", color: "amber", label: "Med", border: "border-l-amber-400" },
+        high: { icon: "ph-warning-circle", color: "rose", label: "High", border: "border-l-rose-500" },
+      };
+      const prio = prioConfig[t.priority || "medium"];
 
-    // Kalkulasi Tenggat Waktu (Due Date)
-    let dueHtml = '';
-    if (t.dueDate) {
-      const due = new Date(t.dueDate);
-      due.setHours(0, 0, 0, 0);
-      const diffDays = Math.ceil((due - todayDate) / (1000 * 60 * 60 * 24));
+      // Kalkulasi Tenggat Waktu (Due Date)
+      let dueHtml = "";
+      if (t.dueDate) {
+        const due = new Date(t.dueDate);
+        due.setHours(0, 0, 0, 0);
+        const diffDays = Math.ceil((due - todayDate) / (1000 * 60 * 60 * 24));
 
-      let dColor = "slate";
-      let dText = formatDate(t.dueDate);
-      let dIcon = "ph-calendar-blank";
+        let dColor = "slate";
+        let dText = formatDate(t.dueDate);
+        let dIcon = "ph-calendar-blank";
 
-      if (!isDone) {
-        if (diffDays < 0) { dColor = "rose"; dText = `Terlambat ${Math.abs(diffDays)} Hari`; dIcon = "ph-warning"; }
-        else if (diffDays === 0) { dColor = "orange"; dText = "Hari Ini!"; dIcon = "ph-clock-countdown"; }
-        else if (diffDays === 1) { dColor = "amber"; dText = "Besok"; }
+        if (!isDone) {
+          if (diffDays < 0) {
+            dColor = "rose";
+            dText = `Terlambat ${Math.abs(diffDays)} Hari`;
+            dIcon = "ph-warning";
+          } else if (diffDays === 0) {
+            dColor = "orange";
+            dText = "Hari Ini!";
+            dIcon = "ph-clock-countdown";
+          } else if (diffDays === 1) {
+            dColor = "amber";
+            dText = "Besok";
+          }
+        }
+
+        dueHtml = `<span class="flex items-center gap-1 text-[10px] font-bold text-${dColor}-600 dark:text-${dColor}-400 bg-${dColor}-100 dark:bg-${dColor}-500/20 px-2 py-0.5 rounded border border-${dColor}-200 dark:border-${dColor}-500/30 uppercase tracking-wide"><i class="ph-fill ${dIcon}"></i> ${dText}</span>`;
       }
+      const tagText = t.tag || "Lainnya";
+      const subCount = (t.subtasks || []).length;
+      const subDone = (t.subtasks || []).filter((s) => s.done).length;
+      const subPct = subCount > 0 ? Math.round((subDone / subCount) * 100) : 0;
+      const subHtml =
+        subCount > 0
+          ? `<span class="flex items-center gap-1 text-[10px] font-bold ${subPct === 100 ? "text-emerald-500 bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200" : "text-slate-500 bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700"} px-2 py-0.5 rounded border uppercase tracking-wide" title="Subtask Progress"><i class="ph-bold ph-check-square"></i> ${subPct}% (${subDone}/${subCount})</span>`
+          : "";
+      const addSubtaskBtn = `<button onclick="event.stopPropagation(); openTaskDetail('${t.id}')" title="Tambah Subtask" class="flex items-center justify-center w-5 h-5 rounded-md text-slate-400 hover:text-sky-500 bg-slate-100 dark:bg-slate-800 hover:bg-sky-50 dark:hover:bg-sky-500/10 transition-colors shrink-0"><i class="ph-bold ph-plus"></i></button>`;
+      const tagHtml = `<span class="flex items-center gap-1 text-[10px] font-bold text-sky-600 dark:text-sky-400 bg-sky-100 dark:bg-sky-500/20 px-2 py-0.5 rounded border border-sky-200 dark:border-sky-500/30 uppercase tracking-wide"><i class="ph-bold ph-tag"></i> ${tagText}</span> ${subHtml} ${addSubtaskBtn}`;
 
-      dueHtml = `<span class="flex items-center gap-1 text-[10px] font-bold text-${dColor}-600 dark:text-${dColor}-400 bg-${dColor}-100 dark:bg-${dColor}-500/20 px-2 py-0.5 rounded border border-${dColor}-200 dark:border-${dColor}-500/30 uppercase tracking-wide"><i class="ph-fill ${dIcon}"></i> ${dText}</span>`;
-    }
-    const tagText = t.tag || 'Lainnya';
-    const subCount = (t.subtasks || []).length;
-    const subDone = (t.subtasks || []).filter(s => s.done).length;
-    const subPct = subCount > 0 ? Math.round((subDone / subCount) * 100) : 0;
-    const subHtml = subCount > 0
-      ? `<span class="flex items-center gap-1 text-[10px] font-bold ${subPct === 100 ? 'text-emerald-500 bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200' : 'text-slate-500 bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700'} px-2 py-0.5 rounded border uppercase tracking-wide" title="Subtask Progress"><i class="ph-bold ph-check-square"></i> ${subPct}% (${subDone}/${subCount})</span>`
-      : '';
-    const addSubtaskBtn = `<button onclick="event.stopPropagation(); openTaskDetail('${t.id}')" title="Tambah Subtask" class="flex items-center justify-center w-5 h-5 rounded-md text-slate-400 hover:text-sky-500 bg-slate-100 dark:bg-slate-800 hover:bg-sky-50 dark:hover:bg-sky-500/10 transition-colors shrink-0"><i class="ph-bold ph-plus"></i></button>`;
-    const tagHtml = `<span class="flex items-center gap-1 text-[10px] font-bold text-sky-600 dark:text-sky-400 bg-sky-100 dark:bg-sky-500/20 px-2 py-0.5 rounded border border-sky-200 dark:border-sky-500/30 uppercase tracking-wide"><i class="ph-bold ph-tag"></i> ${tagText}</span> ${subHtml} ${addSubtaskBtn}`;
-
-
-    return `
-  <div onclick="openTaskDetail('${t.id}')" class="cursor-pointer bg-white dark:bg-dark-surface border border-light-border dark:border-dark-border p-5 rounded-2xl shadow-sm hover:shadow-md transition-all flex flex-col gap-3 relative overflow-hidden border-l-4 ${isDone ? 'border-l-slate-300 dark:border-l-slate-600 opacity-60' : prio.border}">
+      return `
+  <div onclick="openTaskDetail('${t.id}')" class="cursor-pointer bg-white dark:bg-dark-surface border border-light-border dark:border-dark-border p-5 rounded-2xl shadow-sm hover:shadow-md transition-all flex flex-col gap-3 relative overflow-hidden border-l-4 ${isDone ? "border-l-slate-300 dark:border-l-slate-600 opacity-60" : prio.border}">
          <div class="flex items-start justify-between gap-3">
             <div class="flex-1 min-w-0">
                <div class="flex flex-wrap items-center gap-2 mb-2">
                   <span class="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-${prio.color}-500 bg-${prio.color}-50 dark:bg-${prio.color}-500/10 px-2 py-0.5 rounded border border-${prio.color}-200 dark:border-${prio.color}-500/20"><i class="ph-fill ${prio.icon}"></i> ${prio.label}</span>
                   ${tagHtml} ${dueHtml} 
                </div>
-               <h4 class="font-bold text-slate-900 dark:text-white text-lg leading-tight ${isDone ? 'line-through text-slate-400 dark:text-slate-500' : ''}">${t.title}</h4>
+               <h4 class="font-bold text-slate-900 dark:text-white text-lg leading-tight ${isDone ? "line-through text-slate-400 dark:text-slate-500" : ""}">${t.title}</h4>
             </div>
             <button onclick="deleteTask('${t.id}')" class="text-slate-400 hover:text-rose-500 p-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-500/20 transition-colors shrink-0"><i class="ph ph-trash text-lg"></i></button>
          </div>
 
          <div class="mt-4 pt-4 border-t border-light-border dark:border-dark-border flex items-center justify-between">
             <div class="flex items-center gap-2">
-               ${isDone ?
-        `<span class="flex items-center gap-1.5 text-emerald-500 text-sm font-bold"><i class="ph-fill ph-check-circle text-lg"></i> Selesai</span>
+               ${isDone
+          ? `<span class="flex items-center gap-1.5 text-emerald-500 text-sm font-bold"><i class="ph-fill ph-check-circle text-lg"></i> Selesai</span>
                    <button onclick="updateTaskStatus('${t.id}', 'pending')" class="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 underline">Batal</button>`
-        : isProg ?
-          `<span class="flex items-center gap-1.5 text-sky-500 text-sm font-bold"><i class="ph-fill ph-spinner-gap animate-spin-slow text-lg"></i> In Progress</span>
+          : isProg
+            ? `<span class="flex items-center gap-1.5 text-sky-500 text-sm font-bold"><i class="ph-fill ph-spinner-gap animate-spin-slow text-lg"></i> In Progress</span>
                    <button onclick="updateTaskStatus('${t.id}', 'pending')" class="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 underline">Tunda</button>`
-          : `<span class="flex items-center gap-1.5 text-slate-400 text-sm font-bold"><i class="ph-fill ph-clock text-lg"></i> Pending</span>`
-      }
+            : `<span class="flex items-center gap-1.5 text-slate-400 text-sm font-bold"><i class="ph-fill ph-clock text-lg"></i> Pending</span>`
+        }
             </div>
-            
+
             <div class="flex items-center">
-               ${!isDone && !isProg ?
-        `<button onclick="updateTaskStatus('${t.id}', 'progress')" class="bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow border border-transparent">Mulai Kerjakan</button>`
-        : isProg ?
-          `<button onclick="updateTaskStatus('${t.id}', 'completed')" class="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-lg shadow-emerald-500/30 border border-transparent"><i class="ph-bold ph-check mr-1"></i> Selesaikan</button>`
-          : ``}
+               ${!isDone && !isProg
+          ? `<button onclick="updateTaskStatus('${t.id}', 'progress')" class="bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow border border-transparent">Mulai Kerjakan</button>`
+          : isProg
+            ? `<button onclick="updateTaskStatus('${t.id}', 'completed')" class="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-lg shadow-emerald-500/30 border border-transparent"><i class="ph-bold ph-check mr-1"></i> Selesaikan</button>`
+            : ``
+        }
             </div>
          </div>
       </div>
     `;
-  }).join('');
+    })
+    .join("");
 
-  if (typeof renderTaskChart === 'function') renderTaskChart();
+  if (typeof renderTaskChart === "function") renderTaskChart();
 
   const elTotal = document.getElementById("task-stat-total");
   const elComp = document.getElementById("task-stat-completed");
   const elProg = document.getElementById("task-stat-progress");
   const elPend = document.getElementById("task-stat-pending");
   if (elTotal) elTotal.textContent = tasks.length;
-  if (elComp) elComp.textContent = tasks.filter(t => t.status === "completed").length;
-  if (elProg) elProg.textContent = tasks.filter(t => t.status === "progress").length;
-  if (elPend) elPend.textContent = tasks.filter(t => t.status === "pending").length;
+  if (elComp) elComp.textContent = tasks.filter((t) => t.status === "completed").length;
+  if (elProg) elProg.textContent = tasks.filter((t) => t.status === "progress").length;
+  if (elPend) elPend.textContent = tasks.filter((t) => t.status === "pending").length;
 }
 
 // =====================================================================
@@ -2921,32 +2745,36 @@ function renderTasks() {
 // =====================================================================
 
 // Toggle View List / Board
-let currentTaskView = 'list';
+// (currentTaskView dipindahkan ke top-level)
 window.setTaskView = function (view) {
   currentTaskView = view;
-  const btnList = document.getElementById('btn-view-list');
-  const btnBoard = document.getElementById('btn-view-board');
-  const listContainer = document.getElementById('task-list');
-  const boardContainer = document.getElementById('task-board');
+  const btnList = document.getElementById("btn-view-list");
+  const btnBoard = document.getElementById("btn-view-board");
+  const listContainer = document.getElementById("task-list");
+  const boardContainer = document.getElementById("task-board");
 
-  if (view === 'list') {
+  if (view === "list") {
     btnList.className = "px-5 py-1.5 rounded-lg bg-white dark:bg-slate-700 shadow-sm text-sm font-bold text-sky-500 transition-all";
     btnBoard.className = "px-5 py-1.5 rounded-lg text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 text-sm font-medium transition-all";
-    listContainer.classList.remove('hidden');
-    boardContainer.classList.add('hidden');
+    listContainer.classList.remove("hidden");
+    boardContainer.classList.add("hidden");
   } else {
     btnBoard.className = "px-5 py-1.5 rounded-lg bg-white dark:bg-slate-700 shadow-sm text-sm font-bold text-sky-500 transition-all";
     btnList.className = "px-5 py-1.5 rounded-lg text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 text-sm font-medium transition-all";
-    listContainer.classList.add('hidden');
-    boardContainer.classList.remove('hidden');
+    listContainer.classList.add("hidden");
+    boardContainer.classList.remove("hidden");
   }
   // Pastikan merender ulang untuk menyesuaikan tinggi kolom
   renderKanbanBoard();
 };
 
 // Drag and Drop Handlers
-window.allowDropTask = function (ev) { ev.preventDefault(); };
-window.dragTask = function (ev, id) { ev.dataTransfer.setData("taskId", id); };
+window.allowDropTask = function (ev) {
+  ev.preventDefault();
+};
+window.dragTask = function (ev, id) {
+  ev.dataTransfer.setData("taskId", id);
+};
 window.dropTask = function (ev, newStatus) {
   ev.preventDefault();
   const id = ev.dataTransfer.getData("taskId");
@@ -2955,57 +2783,66 @@ window.dropTask = function (ev, newStatus) {
 
 // Fungsi Render Khusus Kartu Kanban
 function renderKanbanBoard() {
-  const boardPending = document.getElementById('board-pending');
-  const boardProgress = document.getElementById('board-progress');
-  const boardCompleted = document.getElementById('board-completed');
+  const boardPending = document.getElementById("board-pending");
+  const boardProgress = document.getElementById("board-progress");
+  const boardCompleted = document.getElementById("board-completed");
   if (!boardPending || !boardProgress || !boardCompleted) return;
 
-  const pendTasks = tasks.filter(t => t.status === 'pending').sort((a, b) => b.id < a.id ? -1 : 1);
-  const progTasks = tasks.filter(t => t.status === 'progress').sort((a, b) => b.id < a.id ? -1 : 1);
-  const compTasks = tasks.filter(t => t.status === 'completed').sort((a, b) => b.id < a.id ? -1 : 1);
+  const pendTasks = tasks.filter((t) => t.status === "pending").sort((a, b) => (b.id < a.id ? -1 : 1));
+  const progTasks = tasks.filter((t) => t.status === "progress").sort((a, b) => (b.id < a.id ? -1 : 1));
+  const compTasks = tasks.filter((t) => t.status === "completed").sort((a, b) => (b.id < a.id ? -1 : 1));
 
-  setEl('board-count-pending', pendTasks.length);
-  setEl('board-count-progress', progTasks.length);
-  setEl('board-count-completed', compTasks.length);
+  setEl("board-count-pending", pendTasks.length);
+  setEl("board-count-progress", progTasks.length);
+  setEl("board-count-completed", compTasks.length);
 
   const todayDate = new Date();
   todayDate.setHours(0, 0, 0, 0);
 
   const createKanbanCard = (t) => {
-    const isDone = t.status === 'completed';
+    const isDone = t.status === "completed";
     const prioConfig = {
       low: { icon: "ph-arrow-down", color: "emerald", label: "Low", border: "border-l-emerald-400" },
       medium: { icon: "ph-equals", color: "amber", label: "Med", border: "border-l-amber-400" },
-      high: { icon: "ph-warning-circle", color: "rose", label: "High", border: "border-l-rose-500" }
+      high: { icon: "ph-warning-circle", color: "rose", label: "High", border: "border-l-rose-500" },
     };
-    const prio = prioConfig[t.priority || 'medium'];
+    const prio = prioConfig[t.priority || "medium"];
 
-    let dueHtml = '';
+    let dueHtml = "";
     if (t.dueDate) {
       const due = new Date(t.dueDate);
       due.setHours(0, 0, 0, 0);
       const diffDays = Math.ceil((due - todayDate) / (1000 * 60 * 60 * 24));
-      let dColor = "slate"; let dText = formatDate(t.dueDate); let dIcon = "ph-calendar-blank";
+      let dColor = "slate";
+      let dText = formatDate(t.dueDate);
+      let dIcon = "ph-calendar-blank";
       if (!isDone) {
-        if (diffDays < 0) { dColor = "rose"; dText = `Terlambat ${Math.abs(diffDays)} Hari`; dIcon = "ph-warning"; }
-        else if (diffDays === 0) { dColor = "orange"; dText = "Hari Ini!"; dIcon = "ph-clock-countdown"; }
+        if (diffDays < 0) {
+          dColor = "rose";
+          dText = `Terlambat ${Math.abs(diffDays)} Hari`;
+          dIcon = "ph-warning";
+        } else if (diffDays === 0) {
+          dColor = "orange";
+          dText = "Hari Ini!";
+          dIcon = "ph-clock-countdown";
+        }
       }
       dueHtml = `<span class="flex items-center gap-1 text-[10px] font-bold text-${dColor}-600 dark:text-${dColor}-400 bg-${dColor}-100 dark:bg-${dColor}-500/20 px-2 py-0.5 rounded border border-${dColor}-200 dark:border-${dColor}-500/30 uppercase tracking-wide"><i class="ph-fill ${dIcon}"></i> ${dText}</span>`;
     }
 
-    const tagHtml = `<span class="flex items-center gap-1 text-[10px] font-bold text-sky-600 dark:text-sky-400 bg-sky-100 dark:bg-sky-500/20 px-2 py-0.5 rounded border border-sky-200 dark:border-sky-500/30 uppercase tracking-wide"><i class="ph-bold ph-tag"></i> ${t.tag || 'Lainnya'}</span>`;
+    const tagHtml = `<span class="flex items-center gap-1 text-[10px] font-bold text-sky-600 dark:text-sky-400 bg-sky-100 dark:bg-sky-500/20 px-2 py-0.5 rounded border border-sky-200 dark:border-sky-500/30 uppercase tracking-wide"><i class="ph-bold ph-tag"></i> ${t.tag || "Lainnya"}</span>`;
     const subCount = (t.subtasks || []).length;
-    const subDone = (t.subtasks || []).filter(s => s.done).length;
+    const subDone = (t.subtasks || []).filter((s) => s.done).length;
     const subPct = subCount > 0 ? Math.round((subDone / subCount) * 100) : 0;
-    const subHtml = subCount > 0
-      ? `<span class="flex items-center gap-1 text-[10px] font-bold ${subPct === 100 ? 'text-emerald-500 bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200' : 'text-slate-500 bg-slate-50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-700'} px-1.5 py-0.5 rounded border uppercase tracking-wide" title="Subtask Progress"><i class="ph-bold ph-check-square"></i> ${subPct}% (${subDone}/${subCount})</span>`
-      : '';
+    const subHtml =
+      subCount > 0
+        ? `<span class="flex items-center gap-1 text-[10px] font-bold ${subPct === 100 ? "text-emerald-500 bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200" : "text-slate-500 bg-slate-50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-700"} px-1.5 py-0.5 rounded border uppercase tracking-wide" title="Subtask Progress"><i class="ph-bold ph-check-square"></i> ${subPct}% (${subDone}/${subCount})</span>`
+        : "";
     const addSubtaskBtn = `<button onclick="event.stopPropagation(); openTaskDetail('${t.id}')" title="Tambah Subtask" class="flex items-center justify-center w-5 h-5 rounded-md text-slate-400 hover:text-sky-500 bg-slate-50 dark:bg-slate-900/50 hover:bg-sky-50 dark:hover:bg-sky-500/10 transition-colors shrink-0"><i class="ph-bold ph-plus"></i></button>`;
-
 
     return `
     <div draggable="true" ondragstart="dragTask(event, '${t.id}')" onclick="openTaskDetail('${t.id}')" 
-         class="cursor-pointer bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 cursor-grab active:cursor-grabbing hover:shadow-md transition-all relative border-l-4 ${isDone ? 'border-l-slate-300 opacity-60' : prio.border}">
+         class="cursor-pointer bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 cursor-grab active:cursor-grabbing hover:shadow-md transition-all relative border-l-4 ${isDone ? "border-l-slate-300 opacity-60" : prio.border}">
            <div class="flex flex-wrap items-center gap-2 mb-3">
               <span class="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-${prio.color}-500 bg-${prio.color}-50 dark:bg-${prio.color}-500/10 px-2 py-0.5 rounded border border-${prio.color}-200 dark:border-${prio.color}-500/20" title="Prioritas"><i class="ph-fill ${prio.icon}"></i></span>
               ${tagHtml}
@@ -3013,7 +2850,7 @@ function renderKanbanBoard() {
               ${addSubtaskBtn}
               ${dueHtml}
            </div>
-           <h4 class="font-bold text-slate-900 dark:text-white text-sm leading-snug ${isDone ? 'line-through text-slate-400' : ''}">${t.title}</h4>
+           <h4 class="font-bold text-slate-900 dark:text-white text-sm leading-snug ${isDone ? "line-through text-slate-400" : ""}">${t.title}</h4>
            <div class="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700 flex justify-between items-center opacity-30 hover:opacity-100 transition-opacity">
               <span class="text-xs text-slate-400 font-medium flex items-center gap-1"><i class="ph ph-arrows-out-cardinal"></i> Tarik / Geser</span>
               <button onclick="deleteTask('${t.id}')" class="text-slate-400 hover:text-rose-500"><i class="ph ph-trash text-lg"></i></button>
@@ -3023,15 +2860,15 @@ function renderKanbanBoard() {
 
   const emptySlot = `<div class="p-5 text-center text-sm font-medium text-slate-400 dark:text-slate-500 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl my-auto"><i class="ph ph-hand-grabbing text-2xl block mb-1"></i> Tarik tugas ke sini</div>`;
 
-  boardPending.innerHTML = pendTasks.length ? pendTasks.map(createKanbanCard).join('') : emptySlot;
-  boardProgress.innerHTML = progTasks.length ? progTasks.map(createKanbanCard).join('') : emptySlot;
-  boardCompleted.innerHTML = compTasks.length ? compTasks.map(createKanbanCard).join('') : emptySlot;
+  boardPending.innerHTML = pendTasks.length ? pendTasks.map(createKanbanCard).join("") : emptySlot;
+  boardProgress.innerHTML = progTasks.length ? progTasks.map(createKanbanCard).join("") : emptySlot;
+  boardCompleted.innerHTML = compTasks.length ? compTasks.map(createKanbanCard).join("") : emptySlot;
 }
 
 // Terakhir, kita wajib menghubungkan render Kanban ini ke dalam pembaruan Task utama
 const oldRenderTasksUntukKanban = renderTasks;
 renderTasks = function () {
-  if (typeof oldRenderTasksUntukKanban === 'function') oldRenderTasksUntukKanban();
+  if (typeof oldRenderTasksUntukKanban === "function") oldRenderTasksUntukKanban();
   renderKanbanBoard();
 };
 
@@ -3039,26 +2876,25 @@ renderTasks = function () {
 document.addEventListener("DOMContentLoaded", () => {
   updatePomoUI();
 
-
   // Add task logic
-  const formTask = document.getElementById('form-task');
+  const formTask = document.getElementById("form-task");
   if (formTask) {
-    formTask.addEventListener('submit', (e) => {
+    formTask.addEventListener("submit", (e) => {
       e.preventDefault();
-      const title = document.getElementById('input-task-title').value.trim();
-      const dueDate = document.getElementById('input-task-duedate').value;
-      const priority = document.getElementById('input-task-priority').value;
-      const tag = document.getElementById('input-task-tag').value.trim() || 'Lainnya'; // 👈 TANGKAP TAG
+      const title = document.getElementById("input-task-title").value.trim();
+      const dueDate = document.getElementById("input-task-duedate").value;
+      const priority = document.getElementById("input-task-priority").value;
+      const tag = document.getElementById("input-task-tag").value.trim() || "Lainnya"; // 👈 TANGKAP TAG
 
       if (!title) return;
 
-      if (typeof saveTaskToDB === 'function') {
+      if (typeof saveTaskToDB === "function") {
         saveTaskToDB(title, dueDate, priority, tag); // 👈 KIRIM TAG
       }
 
       formTask.reset();
-      document.getElementById('task-form-section').classList.add('hidden');
-      showToast('Tugas baru ditambahkan!');
+      document.getElementById("task-form-section").classList.add("hidden");
+      showToast("Tugas baru ditambahkan!");
     });
   }
 
@@ -3075,14 +2911,12 @@ document.addEventListener("DOMContentLoaded", () => {
 // =====================================================================
 // NODE.JS BACKEND INTEGRATION
 // =====================================================================
-const API_URL = "http://localhost:3000/api/transactions";
 
 // 1. Fungsi MENGAMBIL data dari MySQL
 async function getTransactionsFromDB() {
   if (!currentUser) return;
   try {
-    const response = await fetch(API_URL + "?user_id=" + currentUser.id + "&t=" + new Date().getTime());
-    const dbTransactions = await response.json();
+    const dbTransactions = await apiCall("/api/transactions");
     transactions = dbTransactions.map((tx) => ({
       id: tx.id,
       title: tx.description,
@@ -3104,15 +2938,13 @@ async function getTransactionsFromDB() {
 // 2. Fungsi MENYIMPAN data ke MySQL (Sudah dengan fitur Nominal & Silent)
 async function saveTransactionToDB(type, amount, category, date, description, isSilent = false) {
   if (!currentUser) return;
-  const newTransaction = { user_id: currentUser.id, type, amount, category, date, description };
+  const newTransaction = { type, amount, category, date, description };
   try {
-    const response = await fetch(API_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(newTransaction),
-    });
-    const result = await response.json();
-    if (!response.ok) { showToast("Gagal: " + (result.error || "Server error"), "error"); return; }
+    const result = await apiCall("/api/transactions", "POST", newTransaction);
+    if (result && result.error) {
+      showToast("Gagal: " + result.error, "error");
+      return;
+    }
     if (!isSilent) {
       let jenisTx = type === "income" ? "Pemasukan" : "Pengeluaran";
       showToast(`${jenisTx} ${formatCurrency(amount)} berhasil tersimpan!`);
@@ -3124,43 +2956,120 @@ async function saveTransactionToDB(type, amount, category, date, description, is
 }
 
 // Tarik data saat website pertama kali dimuat
-document.addEventListener("DOMContentLoaded", () => {
-  getTransactionsFromDB();
-  getGoalsFromDB();
-  getBillsFromDB();
-  getShiftsFromDB();
-  getTasksFromDB();
-});
+// NOTE: DB fetch calls are handled in loginUser() and in the main DOMContentLoaded
+// (line ~5037) which guards them behind currentUser && auth_token checks.
+// The bare DOMContentLoaded that called these without a currentUser check was removed
+// to prevent 401 errors triggering logout() on page load.
 
 // ==========================================
-// API UNTUK GOALS & BILLS
+// API UNTUK CATEGORIES
 // ==========================================
-const GOALS_API = "http://localhost:3000/api/goals";
-const BILLS_API = "http://localhost:3000/api/bills";
+async function getCategoriesFromDB() {
+  if (!currentUser) {
+    // Set default categories jika belum login
+    categories = [...DEFAULT_CATEGORIES];
+    renderCategoriesDropdown();
+    return;
+  }
+
+  try {
+    const data = await apiCall("/api/categories");
+    if (Array.isArray(data) && data.length > 0) {
+      // Combine default categories dengan custom categories
+      const customCats = data;
+      categories = [...DEFAULT_CATEGORIES, ...customCats];
+    } else {
+      categories = [...DEFAULT_CATEGORIES];
+    }
+    renderCategoriesDropdown();
+  } catch (err) {
+    console.error("Gagal load kategori:", err);
+    categories = [...DEFAULT_CATEGORIES];
+    renderCategoriesDropdown();
+  }
+}
+
+// Fungsi untuk add category ke database (dipanggil dari HTML form)
+async function addCustomCategoryToDB(name, color) {
+  if (!currentUser) {
+    showToast("Silakan login dahulu", "error");
+    return;
+  }
+
+  if (!name || !color) {
+    showToast("Nama dan warna kategori harus diisi", "error");
+    return;
+  }
+
+  try {
+    const res = await apiCall("/api/categories", "POST", { name, color });
+
+    if (res && res.error) {
+      showToast(res.error, "error");
+      return;
+    }
+
+    // Re-fetch categories dari database
+    await getCategoriesFromDB();
+    showToast(`Kategori "${name}" berhasil ditambahkan!`);
+  } catch (err) {
+    console.error("Error add category:", err);
+    showToast("Gagal menambahkan kategori", "error");
+  }
+}
+
+// Fungsi untuk delete category dari database (by ID)
+async function deleteCustomCategoryFromDB(categoryId, categoryName) {
+  if (!currentUser) {
+    showToast("Silakan login dahulu", "error");
+    return;
+  }
+
+  if (!confirm(`Yakin hapus kategori "${categoryName}"?`)) return;
+
+  try {
+    const res = await apiCall(`/api/categories/${categoryId}`, "DELETE");
+
+    if (res && res.error) {
+      showToast(res.error, "error");
+      return;
+    }
+
+    // Re-fetch categories dari database
+    await getCategoriesFromDB();
+    showToast(`Kategori "${categoryName}" berhasil dihapus!`);
+  } catch (err) {
+    console.error("Error delete category:", err);
+    showToast("Gagal menghapus kategori", "error");
+  }
+}
+
+// ==========================================
+// API UNTUK CATEGORIES (END)
+// ==========================================
 
 // --- FUNGSI GOALS ---
 async function getGoalsFromDB() {
   if (!currentUser) return;
   try {
-    const res = await fetch(GOALS_API + "?user_id=" + currentUser.id + "&t=" + new Date().getTime());
-    const data = await res.json();
+    const data = await apiCall("/api/goals");
     goals = data.map((g) => ({ id: g.id, name: g.name, target: Number(g.target), saved: Number(g.saved), deadline: g.deadline, color: g.color, icon: g.icon }));
     saveAll();
     renderGoals();
     renderDashboardGoals();
-  } catch (err) { console.error(err); }
+  } catch (err) {
+    console.error(err);
+  }
 }
 
 async function saveGoalToDB(name, target, saved, deadline, color, icon) {
   if (!currentUser) return;
   try {
-    await fetch(GOALS_API, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ user_id: currentUser.id, name, target, saved, deadline, color, icon }),
-    });
+    await apiCall("/api/goals", "POST", { name, target, saved, deadline, color, icon });
     getGoalsFromDB();
-  } catch (err) { console.error(err); }
+  } catch (err) {
+    console.error(err);
+  }
 }
 
 // Menimpa fungsi deleteGoal lama
@@ -3168,79 +3077,104 @@ async function deleteGoal(id) {
   if (!confirm("Yakin hapus goal ini dari database?")) return;
   if (!currentUser) return;
   try {
-    await fetch(`${GOALS_API}/${id}?user_id=${currentUser.id}`, { method: "DELETE" });
+    await apiCall(`/api/goals/${id}`, "DELETE");
     showToast("Goal dihapus");
     getGoalsFromDB();
-  } catch (err) { console.error(err); }
+  } catch (err) {
+    console.error(err);
+  }
 }
 
 // --- FUNGSI BILLS ---
 async function getBillsFromDB() {
   if (!currentUser) return;
   try {
-    const res = await fetch(BILLS_API + "?user_id=" + currentUser.id + "&t=" + new Date().getTime());
-    const data = await res.json();
+    const data = await apiCall("/api/bills");
     bills = data.map((b) => ({ id: b.id, name: b.name, amount: Number(b.amount), dueDate: b.due_date, category: b.category, paid: b.paid === 1 || b.paid === true, paidDate: b.paid_date }));
     saveAll();
     renderBills();
     renderDashboardBills();
-  } catch (err) { console.error(err); }
+  } catch (err) {
+    console.error(err);
+  }
 }
 
 async function saveBillToDB(name, amount, due_date, category, paid) {
   if (!currentUser) return;
   try {
-    const response = await fetch(BILLS_API, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ user_id: currentUser.id, name, amount, due_date, category, paid }),
-    });
-    const result = await response.json();
-    if (!response.ok) { console.error("Ditolak MySQL:", result.error); showToast("Gagal: Tanggal wajib diisi!", "error"); return; }
+    const result = await apiCall("/api/bills", "POST", { name, amount, due_date, category, paid });
+    if (result && result.error) {
+      console.error("Ditolak MySQL:", result.error);
+      showToast("Gagal: Tanggal wajib diisi!", "error");
+      return;
+    }
     getBillsFromDB();
-  } catch (err) { console.error("Error Fetch:", err); }
+  } catch (err) {
+    console.error("Error Fetch:", err);
+  }
 }
 // Menimpa fungsi deleteBill lama
 async function deleteBill(id) {
   if (!confirm("Yakin hapus tagihan ini dari database?")) return;
   if (!currentUser) return;
   try {
-    await fetch(`${BILLS_API}/${id}?user_id=${currentUser.id}`, { method: "DELETE" });
+    await apiCall(`/api/bills/${id}`, "DELETE");
     showToast("Tagihan dihapus");
     getBillsFromDB();
-  } catch (err) { console.error(err); }
+  } catch (err) {
+    console.error(err);
+  }
 }
 
 // ==========================================
 // API UNTUK SHIFT KERJA
 // ==========================================
-const SHIFTS_API = "http://localhost:3000/api/shifts";
 
 // 1. Ambil data Shift dari Database
 async function getShiftsFromDB() {
   if (!currentUser) return;
   try {
-    const res = await fetch(SHIFTS_API + "?user_id=" + currentUser.id + "&t=" + new Date().getTime());
-    const data = await res.json();
-    shifts = data.map((s) => ({ id: s.id, date: s.date.split("T")[0], type: s.type, startTime: s.start_time, endTime: s.end_time, hours: Number(s.hours), normalHoursWorked: Number(s.normal_hours), overtimeHours: Number(s.overtime_hours), hourlyRate: Number(s.hourly_rate), earnings: Number(s.earnings), recorded: s.recorded === 1 || s.recorded === true }));
+    const data = await apiCall("/api/shifts");
+    shifts = data.map((s) => ({
+      id: s.id,
+      date: s.date.split("T")[0],
+      type: s.type,
+      startTime: s.start_time,
+      endTime: s.end_time,
+      hours: Number(s.hours),
+      normalHoursWorked: Number(s.normal_hours),
+      overtimeHours: Number(s.overtime_hours),
+      hourlyRate: Number(s.hourly_rate),
+      earnings: Number(s.earnings),
+      recorded: s.recorded === 1 || s.recorded === true,
+    }));
     saveAll();
     renderShifts();
     renderOvertimeCard();
-  } catch (err) { console.error("Gagal load shifts:", err); }
+  } catch (err) {
+    console.error("Gagal load shifts:", err);
+  }
 }
 
 // 2. Simpan Shift ke Database
 async function saveShiftToDB(shiftData) {
   if (!currentUser) return;
   try {
-    const response = await fetch(SHIFTS_API, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ user_id: currentUser.id, date: shiftData.date, type: shiftData.type, start_time: shiftData.startTime, end_time: shiftData.endTime, hours: shiftData.hours, normal_hours: shiftData.normalHoursWorked, overtime_hours: shiftData.overtimeHours, hourly_rate: shiftData.hourlyRate, earnings: shiftData.earnings }),
+    await apiCall("/api/shifts", "POST", {
+      date: shiftData.date,
+      type: shiftData.type,
+      start_time: shiftData.startTime,
+      end_time: shiftData.endTime,
+      hours: shiftData.hours,
+      normal_hours: shiftData.normalHoursWorked,
+      overtime_hours: shiftData.overtimeHours,
+      hourly_rate: shiftData.hourlyRate,
+      earnings: shiftData.earnings,
     });
-    if (!response.ok) throw new Error("Gagal menyimpan shift");
     getShiftsFromDB();
-  } catch (err) { console.error("Error save shift:", err); }
+  } catch (err) {
+    console.error("Error save shift:", err);
+  }
 }
 
 // 3. Menimpa fungsi deleteShift lama
@@ -3248,47 +3182,57 @@ async function deleteShift(id) {
   if (!confirm("Yakin hapus shift ini dari database?")) return;
   if (!currentUser) return;
   try {
-    await fetch(`${SHIFTS_API}/${id}?user_id=${currentUser.id}`, { method: "DELETE" });
+    await apiCall(`/api/shifts/${id}`, "DELETE");
     showToast("Shift dihapus");
     getShiftsFromDB();
-  } catch (err) { console.error(err); showToast("Gagal menghapus shift", "error"); }
+  } catch (err) {
+    console.error(err);
+    showToast("Gagal menghapus shift", "error");
+  }
 }
 
 // ==========================================
 // API UNTUK TASKS & PROJECT
 // ==========================================
-const TASKS_API = "http://localhost:3000/api/tasks";
 
 // 1. Ambil data Task dari Database
 async function getTasksFromDB() {
   if (!currentUser) return;
   try {
-    const res = await fetch(TASKS_API + "?user_id=" + currentUser.id + "&t=" + new Date().getTime());
-    const data = await res.json();
-    tasks = data.map((t) => ({ id: t.id, title: t.title, status: t.status, dueDate: t.due_date || t.dueDate || null, priority: t.priority || 'medium', tag: t.tag || 'Lainnya', subtasks: (typeof t.subtasks === 'string' ? JSON.parse(t.subtasks || '[]') : t.subtasks) || [] }));
+    const data = await apiCall("/api/tasks");
+    tasks = data.map((t) => ({
+      id: t.id,
+      title: t.title,
+      status: t.status,
+      dueDate: t.due_date || t.dueDate || null,
+      priority: t.priority || "medium",
+      tag: t.tag || "Lainnya",
+      subtasks: (typeof t.subtasks === "string" ? JSON.parse(t.subtasks || "[]") : t.subtasks) || [],
+    }));
     saveAll();
     renderTasks();
-  } catch (err) { console.error("Gagal load tasks:", err); }
+    if (typeof renderDashboardTasks === "function") renderDashboardTasks();
+    updateDashboard();
+  } catch (err) {
+    console.error("Gagal load tasks:", err);
+  }
 }
 
 // 2. Simpan Task Baru ke Database
 window.saveTaskToDB = async function (title, dueDate, priority, tag) {
   if (!currentUser) return;
   const finalDueDate = dueDate ? dueDate : null;
-  const newTask = { id: 'task-' + Date.now(), title, status: 'pending', dueDate: finalDueDate, priority: priority || 'medium', tag: tag || 'Lainnya' };
+  const newTask = { id: "task-" + Date.now(), title, status: "pending", dueDate: finalDueDate, priority: priority || "medium", tag: tag || "Lainnya" };
   tasks.push(newTask);
   saveAll();
   renderTasks();
-  if (typeof renderDashboardTasks === 'function') renderDashboardTasks();
+  if (typeof renderDashboardTasks === "function") renderDashboardTasks();
   try {
-    const response = await fetch(TASKS_API, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ user_id: currentUser.id, title, status: 'pending', due_date: finalDueDate, priority, tag }),
-    });
-    if (!response.ok) throw new Error("Gagal menyimpan task ke server");
+    await apiCall("/api/tasks", "POST", { title, status: "pending", due_date: finalDueDate, priority, tag });
     getTasksFromDB();
-  } catch (err) { console.warn("Server MySQL offline, task disimpan lokal.", err); }
+  } catch (err) {
+    console.warn("Server MySQL offline, task disimpan lokal.", err);
+  }
 };
 
 // 3. Update Status Task
@@ -3299,17 +3243,13 @@ window.updateTaskStatus = async function (id, newStatus) {
     t.status = newStatus;
     saveAll();
     renderTasks();
-    if (typeof renderDashboardTasks === 'function') renderDashboardTasks();
+    if (typeof renderDashboardTasks === "function") renderDashboardTasks();
     if (newStatus === "completed") showToast(`Task selesai! 🎉`);
   }
 
   // B. Update ke server
   try {
-    await fetch(`${TASKS_API}/${id}/status`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: newStatus }),
-    });
+    await apiCall(`/api/tasks/${id}/status`, "PUT", { status: newStatus });
   } catch (err) {
     console.error("Error update status:", err);
   }
@@ -3322,18 +3262,162 @@ window.deleteTask = async function (id) {
   tasks = tasks.filter((t) => String(t.id) !== String(id));
   saveAll();
   renderTasks();
-  if (typeof renderDashboardTasks === 'function') renderDashboardTasks();
+  if (typeof renderDashboardTasks === "function") renderDashboardTasks();
   showToast("Task dihapus");
   try {
-    await fetch(`${TASKS_API}/${id}?user_id=${currentUser.id}`, { method: "DELETE" });
-  } catch (err) { console.error(err); }
+    await apiCall(`/api/tasks/${id}`, "DELETE");
+  } catch (err) {
+    console.error(err);
+  }
 };
+
+// ==========================================
+// API UNTUK RECURRING, DEBTS, BUDGETS
+// ==========================================
+
+async function getRecurringFromDB() {
+  if (!currentUser) return;
+  try {
+    const data = await apiCall("/api/recurring");
+    recurring = data.map((r) => ({ ...r, amount: Number(r.amount) }));
+    if (typeof renderRecurring === "function") renderRecurring();
+  } catch (err) {
+    console.error("Gagal load recurring:", err);
+  }
+}
+
+async function getDebtsFromDB() {
+  if (!currentUser) return;
+  try {
+    const data = await apiCall("/api/debts");
+    debts = data.map((d) => ({
+      ...d,
+      amount: Number(d.amount),
+      paidAmount: Number(d.paidAmount || d.paid_amount || 0),
+    }));
+    if (typeof renderDebts === "function") renderDebts();
+  } catch (err) {
+    console.error("Gagal load debts:", err);
+  }
+}
+
+async function saveDebtToDB(type, name, amount, date, dueDate, notes) {
+  if (!currentUser) return;
+  try {
+    await apiCall("/api/debts", "POST", { type, name, amount, date, dueDate, notes, paid: false });
+    getDebtsFromDB();
+  } catch (err) {
+    console.error("Error saving debt:", err);
+  }
+}
+
+async function updateDebtPaidAmountInDB(id, paidAmount, paidStatus) {
+  try {
+    await apiCall(`/api/debts/${id}`, "PUT", { paid_amount: paidAmount, paid: paidStatus });
+    getDebtsFromDB();
+  } catch (err) {
+    console.error("Error updating debt:", err);
+  }
+}
+
+async function deleteDebtFromDB(id) {
+  try {
+    await apiCall(`/api/debts/${id}`, "DELETE");
+    getDebtsFromDB();
+  } catch (err) {
+    console.error("Error deleting debt:", err);
+  }
+}
+
+async function getBudgetsFromDB() {
+  if (!currentUser) return;
+  try {
+    const data = await apiCall("/api/budgets");
+    budgets = data.map((b) => ({ ...b, limit: Number(b.limit || b.amount || 0) })); // Handling amount mapped as limit logic backend mismatch
+    if (typeof renderBudgets === "function") renderBudgets();
+  } catch (err) {
+    console.error("Gagal load budgets:", err);
+  }
+}
+
+async function saveBudgetToDB(category, amount, month) {
+  if (!currentUser) return;
+  try {
+    await apiCall("/api/budgets", "POST", { category, amount, month });
+    getBudgetsFromDB();
+  } catch (err) {
+    console.error("Error saving budget:", err);
+  }
+}
+
+async function updateBudgetInDB(id, amount) {
+  try {
+    await apiCall(`/api/budgets/${id}`, "PUT", { amount });
+    getBudgetsFromDB();
+  } catch (err) {
+    console.error("Error updating budget:", err);
+  }
+}
+
+async function deleteBudgetFromDB(id) {
+  try {
+    await apiCall(`/api/budgets/${id}`, "DELETE");
+    getBudgetsFromDB();
+  } catch (err) {
+    console.error("Error deleting budget:", err);
+  }
+}
+
+async function getAssetsFromDB() {
+  if (!currentUser) return;
+  try {
+    const data = await apiCall("/api/assets");
+    assets = data.map((a) => ({
+      ...a,
+      value: Number(a.value),
+    }));
+    if (typeof renderAssets === "function") renderAssets();
+  } catch (err) {
+    console.error("Gagal load assets:", err);
+  }
+}
+
+async function saveAssetToDB(name, type, value, purchaseDate, notes) {
+  if (!currentUser) return;
+  try {
+    await apiCall("/api/assets", "POST", { name, type, value, purchase_date: purchaseDate, notes });
+    getAssetsFromDB();
+  } catch (err) {
+    console.error("Error saving asset:", err);
+  }
+}
+
+async function updateAssetValueInDB(id, name, type, value, purchaseDate, notes) {
+  try {
+    // Requires name, type, etc. for PUT per backend spec, but we'll try to just patch value where possible
+    const a = assets.find((x) => x.id == id);
+    if (!a) return;
+    await apiCall(`/api/assets/${id}`, "PUT", {
+      name: a.name, type: a.type, value: value, purchase_date: a.purchase_date || new Date().toISOString().split("T")[0], notes: a.notes || ""
+    });
+    getAssetsFromDB();
+  } catch (err) {
+    console.error("Error updating asset:", err);
+  }
+}
+
+async function deleteAssetFromDB(id) {
+  try {
+    await apiCall(`/api/assets/${id}`, "DELETE");
+    getAssetsFromDB();
+  } catch (err) {
+    console.error("Error deleting asset:", err);
+  }
+}
 
 // ==========================================
 // 💸 LOGIKA REMITTANCE (KIRIM UANG)
 // ==========================================
-const REMITTANCE_API = "http://localhost:3000/api/remittances";
-let remittances = [];
 
 // Fungsi Navigasi Sub-Menu (Remittance, Documents, Nenkin)
 function bukaHalaman(viewId) {
@@ -3358,10 +3442,12 @@ function bukaHalaman(viewId) {
 async function getRemittancesFromDB() {
   if (!currentUser) return;
   try {
-    const response = await fetch(REMITTANCE_API + "?user_id=" + currentUser.id + "&t=" + new Date().getTime());
-    remittances = await response.json();
+    const response = await apiCall("/api/remittances");
+    remittances = response;
     renderRemittanceHistory();
-  } catch (err) { console.error("Gagal load remittance:", err); }
+  } catch (err) {
+    console.error("Gagal load remittance:", err);
+  }
 }
 
 // 2. Kalkulator Rupiah Otomatis (Yen * Kurs)
@@ -3392,12 +3478,7 @@ if (formRemittance) {
     const notes = document.getElementById("input-rem-notes").value;
 
     try {
-      const response = await fetch(REMITTANCE_API, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: currentUser ? currentUser.id : null, date, amount_jpy, exchange_rate, amount_idr, provider, notes }),
-      });
-      if (!response.ok) throw new Error("Gagal simpan");
+      await apiCall("/api/remittances", "POST", { date, amount_jpy, exchange_rate, amount_idr, provider, notes });
 
       showToast("Berhasil mencatat kiriman uang!");
       formRemittance.reset();
@@ -3462,9 +3543,12 @@ async function hapusRemittance(id) {
   if (!confirm("Hapus catatan kiriman ini?")) return;
   if (!currentUser) return;
   try {
-    const response = await fetch(`${REMITTANCE_API}/${id}?user_id=${currentUser.id}`, { method: "DELETE" });
-    if (response.ok) { showToast("Catatan terhapus!"); getRemittancesFromDB(); }
-  } catch (err) { showToast("Gagal menghapus data", "error"); }
+    await apiCall(`/api/remittances/${id}`, "DELETE");
+    showToast("Catatan terhapus!");
+    getRemittancesFromDB();
+  } catch (err) {
+    showToast("Gagal menghapus data", "error");
+  }
 }
 
 // Set tanggal default saat aplikasi dimuat
@@ -3476,17 +3560,17 @@ document.addEventListener("DOMContentLoaded", () => {
 // ==========================================
 // 🚨 LOGIKA DOKUMEN PENTING (ALARM)
 // ==========================================
-const DOCUMENTS_API = "http://localhost:3000/api/documents";
-let documentsData = [];
 
 // 1. Ambil Data dari Database
 async function getDocumentsFromDB() {
   if (!currentUser) return;
   try {
-    const response = await fetch(DOCUMENTS_API + "?user_id=" + currentUser.id + "&t=" + new Date().getTime());
-    documentsData = await response.json();
+    const response = await apiCall("/api/documents");
+    documentsData = response;
     renderDocuments();
-  } catch (err) { console.error("Gagal load dokumen:", err); }
+  } catch (err) {
+    console.error("Gagal load dokumen:", err);
+  }
 }
 
 // 2. Simpan Data Baru
@@ -3500,12 +3584,7 @@ if (formDocument) {
     const notes = document.getElementById("input-doc-notes").value;
 
     try {
-      const response = await fetch(DOCUMENTS_API, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: currentUser ? currentUser.id : null, title, type, expiry_date, notes }),
-      });
-      if (!response.ok) throw new Error("Gagal simpan");
+      await apiCall("/api/documents", "POST", { title, type, expiry_date, notes });
 
       showToast("Alarm dokumen berhasil dipasang!");
       formDocument.reset();
@@ -3572,14 +3651,14 @@ function renderDocuments() {
           <i class="ph ph-trash text-lg"></i>
         </button>
       </div>
-      
+
       <div class="mb-4">
         <p class="text-sm text-slate-500 dark:text-slate-400 mb-1">Berlaku Sampai:</p>
         <p class="font-semibold text-slate-800 dark:text-slate-200">${formatDate(doc.expiry_date)}</p>
       </div>
-      
+
       ${doc.notes ? `<p class="text-sm text-slate-500 bg-slate-50 dark:bg-slate-800 p-3 rounded-lg mb-4 italic">"${doc.notes}"</p>` : ""}
-      
+
       <div class="pt-4 border-t border-light-border dark:border-dark-border mt-auto">
         <div class="flex items-center gap-2 px-3 py-2 rounded-lg border ${statusClass} font-medium text-sm w-fit">
           <i class="ph-fill ${statusIcon}"></i> ${statusText}
@@ -3595,25 +3674,28 @@ async function hapusDocument(id) {
   if (!confirm("Hapus alarm dokumen ini?")) return;
   if (!currentUser) return;
   try {
-    const response = await fetch(`${DOCUMENTS_API}/${id}?user_id=${currentUser.id}`, { method: "DELETE" });
-    if (response.ok) { showToast("Alarm dihapus!"); getDocumentsFromDB(); }
-  } catch (err) { showToast("Gagal menghapus data", "error"); }
+    await apiCall(`/api/documents/${id}`, "DELETE");
+    showToast("Alarm dihapus!");
+    getDocumentsFromDB();
+  } catch (err) {
+    showToast("Gagal menghapus data", "error");
+  }
 }
 
 // ==========================================
 // 🏦 LOGIKA KALKULATOR NENKIN
 // ==========================================
-const NENKIN_API = "http://localhost:3000/api/nenkin";
-let nenkinData = [];
 
 // 1. Ambil Data
 async function getNenkinFromDB() {
   if (!currentUser) return;
   try {
-    const response = await fetch(NENKIN_API + "?user_id=" + currentUser.id + "&t=" + new Date().getTime());
-    nenkinData = await response.json();
+    const response = await apiCall("/api/nenkin");
+    nenkinData = response;
     renderNenkinHistory();
-  } catch (err) { console.error(err); }
+  } catch (err) {
+    console.error(err);
+  }
 }
 
 // 2. Kalkulator Pintar (Sesuai Aturan JHT Jepang)
@@ -3675,12 +3757,7 @@ if (formNenkin) {
     };
 
     try {
-      const response = await fetch(NENKIN_API, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      if (!response.ok) throw new Error("Gagal");
+      await apiCall("/api/nenkin", "POST", data);
 
       showToast("Estimasi berhasil disimpan!");
       formNenkin.reset();
@@ -3725,15 +3802,13 @@ function renderNenkinHistory() {
 
 async function hapusNenkin(id) {
   if (!confirm("Hapus catatan ini?")) return;
-  await fetch(`${NENKIN_API}/${id}`, { method: "DELETE" });
+  await apiCall(`/api/nenkin/${id}`, "DELETE");
   getNenkinFromDB();
 }
 
 // ==========================================
 // 🗓️ CUSTOM MONTH PICKER UI
 // ==========================================
-let targetMonthInputId = "";
-let currentPickerYear = new Date().getFullYear();
 
 function openMonthPicker(inputId) {
   targetMonthInputId = inputId;
@@ -3823,13 +3898,7 @@ window.showAddSavingModal = async function (goalId) {
 
   try {
     // Kirim perintah UPDATE ke backend (MySQL)
-    const response = await fetch(`${GOALS_API}/${g.id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ saved: newSaved }),
-    });
-
-    if (!response.ok) throw new Error("Gagal update ke database");
+    await apiCall(`/api/goals/${g.id}`, "PUT", { saved: newSaved });
 
     showToast(`Tabungan untuk "${g.name}" berhasil ditambahkan!`);
 
@@ -3844,9 +3913,6 @@ window.showAddSavingModal = async function (goalId) {
 // ==========================================
 // 📅 CUSTOM FULL DATE PICKER UI (YYYY-MM-DD)
 // ==========================================
-let targetDatePickerInputId = "";
-// Tanggal yang sedang dilihat oleh user di picker (bulan/tahun apa)
-let viewedDatePickerDate = new Date();
 
 // Membuka Kalender
 function openDatePicker(inputId) {
@@ -4000,7 +4066,7 @@ function renderDebts() {
             </div>
             <button onclick="deleteDebt('${d.id}')" class="text-slate-400 hover:text-rose-500 p-1 transition-colors opacity-0 group-hover:opacity-100"><i class="ph ph-trash text-lg"></i></button>
          </div>
-         
+
          <div class="mb-4">
             <div class="flex justify-between items-end mb-1">
                <span class="text-sm text-slate-500 dark:text-slate-400">Total: ${formatCurrency(d.amount)}</span>
@@ -4010,7 +4076,7 @@ function renderDebts() {
                <div class="bg-${color}-500 h-1.5 rounded-full transition-all" style="width: ${pct}%"></div>
             </div>
          </div>
-         
+
          <div class="mt-auto pt-3 border-t border-light-border dark:border-dark-border flex gap-2">
             ${!isPaid
           ? `
@@ -4062,18 +4128,7 @@ if (formUtang) {
       return;
     }
 
-    debts.push({
-      id: "debt-" + Date.now(),
-      type,
-      person,
-      amount,
-      paidAmount: 0,
-      date,
-      notes,
-    });
-
-    saveAll();
-    renderDebts();
+    saveDebtToDB(type, person, amount, date, date, notes);
 
     formUtang.reset();
     document.getElementById("input-utang-date").value = new Date().toISOString().split("T")[0];
@@ -4102,8 +4157,9 @@ window.payDebt = function (id) {
   }
 
   d.paidAmount += Math.min(payAmt, sisa); // Jangan sampai minus
+  updateDebtPaidAmountInDB(id, d.paidAmount, sisa - Math.min(payAmt, sisa) <= 0);
 
-  // Opsional: Catat pembayaran ini ke Transaksi utama secara otomatis?
+  // Opsional: Catat pembayaran ini ke Transaksi utama secara otomatis
   if (confirm("Ingin mencatat pembayaran ini ke Riwayat Transaksi Utama juga?")) {
     const txType = d.type === "utang" ? "expense" : "income";
     const txTitle = d.type === "utang" ? `Bayar utang ke ${d.person}` : `Terima piutang dari ${d.person}`;
@@ -4112,18 +4168,13 @@ window.payDebt = function (id) {
   } else {
     showToast("Pembayaran berhasil dicatat!");
   }
-
-  saveAll();
-  renderDebts();
 };
 
 // Fungsi Hapus Utang
 window.deleteDebt = function (id) {
   if (!confirm("Yakin ingin menghapus catatan utang/piutang ini?")) return;
-  debts = debts.filter((x) => x.id !== id);
-  saveAll();
-  renderDebts();
-  showToast("Catatan dihapus");
+  deleteDebtFromDB(id);
+  showToast("Menghapus Catatan...");
 };
 
 // Panggil render saat DOM Load
@@ -4186,7 +4237,7 @@ function renderBudgets() {
                <button onclick="deleteBudget('${b.id}')" title="Hapus" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/20 transition-colors"><i class="ph ph-trash text-lg"></i></button>
             </div>
          </div>
-         
+
          <div class="mb-3 flex justify-between items-end">
             <div>
                <p class="text-xs text-slate-500 mb-0.5">Sudah Terpakai</p>
@@ -4197,16 +4248,16 @@ function renderBudgets() {
                <h4 class="text-xl font-bold text-${statusColor}-500">${formatCurrency(sisa < 0 ? 0 : sisa)}</h4>
             </div>
          </div>
-         
+
          <div class="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2.5 mb-2 overflow-hidden border border-slate-200 dark:border-slate-700">
             <div class="bg-${statusColor}-500 h-2.5 rounded-full transition-all duration-1000 ease-out" style="width: ${pct}%"></div>
          </div>
-         
+
          <div class="flex justify-between items-center mt-1">
             <span class="text-xs font-bold text-${statusColor}-500">${pct.toFixed(1)}% (${statusText})</span>
             <span class="text-xs font-medium text-slate-500">Batas: ${formatCurrency(b.limit)}</span>
          </div>
-         
+
          <div class="mt-5 pt-4 border-t border-light-border dark:border-dark-border">
             <button onclick="quickAddExpense('${b.category}')" class="w-full bg-slate-50 hover:bg-${statusColor}-50 dark:bg-slate-800 dark:hover:bg-${statusColor}-500/10 text-slate-600 hover:text-${statusColor}-600 dark:text-slate-300 py-3 rounded-lg text-sm font-bold transition-colors flex justify-center items-center gap-2 border border-slate-200 dark:border-slate-700">
                <i class="ph ph-plus-circle text-lg"></i> Catat Pengeluaran
@@ -4255,9 +4306,7 @@ if (formBudget) {
       return;
     }
 
-    budgets.push({ id: "bud-" + Date.now(), name, category, limit });
-    saveAll();
-    renderBudgets();
+    saveBudgetToDB(category, limit, new Date().toISOString().slice(0, 7) + "-01");
     formBudget.reset();
     formSectionBudget.classList.add("hidden");
     showToast("Budget berhasil dibuat!");
@@ -4270,18 +4319,14 @@ window.editBudget = function (id) {
   if (!b) return;
   const newLimit = prompt(`Ubah batas maksimal budget untuk ${b.name} (¥):`, b.limit);
   if (!newLimit || isNaN(parseInt(newLimit)) || parseInt(newLimit) <= 0) return;
-  b.limit = parseInt(newLimit);
-  saveAll();
-  renderBudgets();
-  showToast("Budget berhasil diperbarui!");
+  updateBudgetInDB(id, parseInt(newLimit));
+  showToast("Memperbarui budget...");
 };
 
 window.deleteBudget = function (id) {
   if (!confirm("Hapus budget ini? (Catatan pengeluarannya tidak akan terhapus)")) return;
-  budgets = budgets.filter((x) => x.id !== id);
-  saveAll();
-  renderBudgets();
-  showToast("Budget dihapus");
+  deleteBudgetFromDB(id);
+  showToast("Menghapus budget...");
 };
 
 // Quick Add Expense (Sesuai request 'Add Saving' / Tambah data cepat)
@@ -4319,8 +4364,8 @@ function renderAssets() {
   if (!container) return;
 
   // 1. Kalkulasi Total Beban Utang (Dari modul utang)
-  const activeDebts = debts.filter(d => d.amount > d.paidAmount);
-  const totalUtangKewajiban = activeDebts.filter(d => d.type === "utang").reduce((s, d) => s + (d.amount - d.paidAmount), 0);
+  const activeDebts = debts.filter((d) => d.amount > d.paidAmount);
+  const totalUtangKewajiban = activeDebts.filter((d) => d.type === "utang").reduce((s, d) => s + (d.amount - d.paidAmount), 0);
 
   // 2. Kalkulasi Total Nilai Aset
   const totalAssets = assets.reduce((s, a) => s + a.value, 0);
@@ -4338,16 +4383,17 @@ function renderAssets() {
     return;
   }
 
-  container.innerHTML = assets.map(a => {
-    // Pilih Ikon berdasarkan tipe
-    let icon = "ph-diamond";
-    if (a.type.includes("Tunai")) icon = "ph-wallet";
-    else if (a.type.includes("Investasi")) icon = "ph-trend-up";
-    else if (a.type.includes("Emas")) icon = "ph-coin";
-    else if (a.type.includes("Properti")) icon = "ph-house-line";
-    else if (a.type.includes("Kendaraan")) icon = "ph-car";
+  container.innerHTML = assets
+    .map((a) => {
+      // Pilih Ikon berdasarkan tipe
+      let icon = "ph-diamond";
+      if (a.type.includes("Tunai")) icon = "ph-wallet";
+      else if (a.type.includes("Investasi")) icon = "ph-trend-up";
+      else if (a.type.includes("Emas")) icon = "ph-coin";
+      else if (a.type.includes("Properti")) icon = "ph-house-line";
+      else if (a.type.includes("Kendaraan")) icon = "ph-car";
 
-    return `
+      return `
       <div class="bg-white dark:bg-dark-surface border border-light-border dark:border-dark-border p-5 rounded-3xl flex flex-col shadow-sm hover:shadow-md transition-shadow group relative overflow-hidden">
          <div class="flex justify-between items-start mb-6">
             <div class="w-12 h-12 rounded-2xl bg-amber-50 dark:bg-amber-500/10 text-amber-500 flex items-center justify-center text-2xl shrink-0">
@@ -4358,7 +4404,7 @@ function renderAssets() {
                <button onclick="deleteAsset('${a.id}')" title="Hapus Aset" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/20 transition-colors"><i class="ph ph-trash text-lg"></i></button>
             </div>
          </div>
-         
+
          <div class="mt-auto">
             <span class="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 uppercase tracking-wider mb-2 inline-block">${a.type}</span>
             <h4 class="font-bold text-slate-900 dark:text-white mb-1 truncate">${a.name}</h4>
@@ -4366,7 +4412,8 @@ function renderAssets() {
          </div>
       </div>
     `;
-  }).join('');
+    })
+    .join("");
 }
 
 // Buka/Tutup Form
@@ -4393,12 +4440,16 @@ if (formAsset) {
     const name = document.getElementById("input-asset-name").value.trim();
     const value = parseInt(document.getElementById("input-asset-value").value) || 0;
 
-    if (!name) { showToast("Nama aset harus diisi!", "error"); return; }
-    if (value < 0) { showToast("Nilai aset tidak valid!", "error"); return; }
+    if (!name) {
+      showToast("Nama aset harus diisi!", "error");
+      return;
+    }
+    if (value < 0) {
+      showToast("Nilai aset tidak valid!", "error");
+      return;
+    }
 
-    assets.push({ id: "ast-" + Date.now(), type, name, value });
-    saveAll();
-    renderAssets();
+    saveAssetToDB(name, type, value, new Date().toISOString().split("T")[0], "");
 
     formAsset.reset();
     formSectionAsset.classList.add("hidden");
@@ -4408,23 +4459,19 @@ if (formAsset) {
 
 // Fungsi Update Nilai & Hapus
 window.updateAssetValue = function (id) {
-  const a = assets.find(x => x.id === id);
+  const a = assets.find((x) => x.id == id);
   if (!a) return;
   const newValue = prompt(`Update estimasi nilai saat ini untuk ${a.name} (¥):`, a.value);
   if (newValue === null || isNaN(parseInt(newValue)) || parseInt(newValue) < 0) return;
 
-  a.value = parseInt(newValue);
-  saveAll();
-  renderAssets();
-  showToast("Nilai aset diperbarui!");
+  updateAssetValueInDB(id, a.name, a.type, parseInt(newValue), a.purchase_date, a.notes);
+  showToast("Memperbarui nilai aset...");
 };
 
 window.deleteAsset = function (id) {
   if (!confirm("Yakin ingin menghapus aset ini dari pantauan?")) return;
-  assets = assets.filter(x => x.id !== id);
-  saveAll();
-  renderAssets();
-  showToast("Aset dihapus");
+  deleteAssetFromDB(id);
+  showToast("Menghapus aset...");
 };
 
 // Render di awal aplikasi dimuat & saat utang diupdate (agar Net Worth sinkron)
@@ -4435,91 +4482,95 @@ document.addEventListener("DOMContentLoaded", () => {
 // Timpa renderDebts agar setiap utang dicicil, Net Worth ikut berubah
 const oldRenderDebtsAsset = renderDebts;
 renderDebts = function () {
-  if (typeof oldRenderDebtsAsset === 'function') oldRenderDebtsAsset();
+  if (typeof oldRenderDebtsAsset === "function") oldRenderDebtsAsset();
   renderAssets(); // Sinkronisasi silang
 };
 
 // Tambahkan agar Dashboard Tasks selalu up-to-date
 const oldRenderTasksDash = renderTasks;
 renderTasks = function () {
-  if (typeof oldRenderTasksDash === 'function') oldRenderTasksDash();
-  if (typeof renderDashboardTasks === 'function') renderDashboardTasks();
+  if (typeof oldRenderTasksDash === "function") oldRenderTasksDash();
+  if (typeof renderDashboardTasks === "function") renderDashboardTasks();
 };
 
 // Panggil sekali di awal untuk memuat data
 document.addEventListener("DOMContentLoaded", () => {
   if (currentUser) {
     setTimeout(() => {
-      if (typeof renderDashboardTasks === 'function') renderDashboardTasks();
+      if (typeof renderDashboardTasks === "function") renderDashboardTasks();
     }, 500); // Sedikit delay memastikan data tugas sudah termuat dari memori
   }
 });
 
-let activeTaskIdForSubtask = null;
+// (activeTaskIdForSubtask dipindahkan ke top-level)
 window.openTaskDetail = function (id) {
   // Pastikan perbandingan ID kuat
-  const t = tasks.find(x => String(x.id) === String(id));
+  const t = tasks.find((x) => String(x.id) === String(id));
   if (!t) return;
 
   activeTaskIdForSubtask = id;
 
-  document.getElementById('detail-task-title').textContent = t.title;
+  document.getElementById("detail-task-title").textContent = t.title;
   renderSubtasks();
-  document.getElementById('modal-task-detail').classList.remove('hidden');
+  document.getElementById("modal-task-detail").classList.remove("hidden");
 };
 
 window.closeTaskDetail = function () {
-  document.getElementById('modal-task-detail').classList.add('hidden');
+  document.getElementById("modal-task-detail").classList.add("hidden");
   activeTaskIdForSubtask = null;
 };
 
 function renderSubtasks() {
-  const t = tasks.find(x => String(x.id) === String(activeTaskIdForSubtask));
-  const container = document.getElementById('subtask-list-container');
+  const t = tasks.find((x) => String(x.id) === String(activeTaskIdForSubtask));
+  const container = document.getElementById("subtask-list-container");
   if (!t || !container) return;
 
   const list = t.subtasks || [];
-  const completed = list.filter(s => s.done).length;
+  const completed = list.filter((s) => s.done).length;
   const pct = list.length ? Math.round((completed / list.length) * 100) : 0;
 
   // Update Progress UI
-  document.getElementById('subtask-progress-bar').style.width = `${pct}%`;
-  document.getElementById('subtask-progress-text').textContent = `${pct}% Selesai (${completed}/${list.length})`;
+  document.getElementById("subtask-progress-bar").style.width = `${pct}%`;
+  document.getElementById("subtask-progress-text").textContent = `${pct}% Selesai (${completed}/${list.length})`;
 
-  container.innerHTML = list.map((s, index) => `
+  container.innerHTML = list
+    .map(
+      (s, index) => `
     <div class="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl group border border-transparent hover:border-sky-500/30 transition-all">
-      <input type="checkbox" ${s.done ? 'checked' : ''} onchange="toggleSubtask(${index})" class="w-5 h-5 rounded border-slate-300 text-sky-500 focus:ring-sky-500 cursor-pointer">
-      <span class="flex-1 text-sm ${s.done ? 'line-through text-slate-400' : 'text-slate-700 dark:text-slate-300'} font-medium">${s.text}</span>
+      <input type="checkbox" ${s.done ? "checked" : ""} onchange="toggleSubtask(${index})" class="w-5 h-5 rounded border-slate-300 text-sky-500 focus:ring-sky-500 cursor-pointer">
+      <span class="flex-1 text-sm ${s.done ? "line-through text-slate-400" : "text-slate-700 dark:text-slate-300"} font-medium">${s.text}</span>
       <button onclick="deleteSubtask(${index})" class="opacity-0 group-hover:opacity-100 text-rose-500 p-1 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-lg transition-all"><i class="ph ph-trash"></i></button>
     </div>
-  `).join('');
+  `,
+    )
+    .join("");
 
   renderTasks(); // Update lencana progres di kartu utama
 }
 
 window.addNewSubtask = async function () {
-  const input = document.getElementById('input-new-subtask');
+  const input = document.getElementById("input-new-subtask");
   const text = input.value.trim();
   if (!text) return;
 
-  const t = tasks.find(x => String(x.id) === String(activeTaskIdForSubtask));
+  const t = tasks.find((x) => String(x.id) === String(activeTaskIdForSubtask));
   if (!t.subtasks) t.subtasks = [];
   t.subtasks.push({ text, done: false });
 
   await saveSubtasksToDB(t.id, t.subtasks);
-  input.value = '';
+  input.value = "";
   renderSubtasks();
 };
 
 window.toggleSubtask = async function (index) {
-  const t = tasks.find(x => String(x.id) === String(activeTaskIdForSubtask));
+  const t = tasks.find((x) => String(x.id) === String(activeTaskIdForSubtask));
   t.subtasks[index].done = !t.subtasks[index].done;
   await saveSubtasksToDB(t.id, t.subtasks);
   renderSubtasks();
 };
 
 window.deleteSubtask = async function (index) {
-  const t = tasks.find(x => String(x.id) === String(activeTaskIdForSubtask));
+  const t = tasks.find((x) => String(x.id) === String(activeTaskIdForSubtask));
   t.subtasks.splice(index, 1);
   await saveSubtasksToDB(t.id, t.subtasks);
   renderSubtasks();
@@ -4528,20 +4579,11 @@ window.deleteSubtask = async function (index) {
 async function saveSubtasksToDB(taskId, subtasksArray) {
   saveAll(); // Simpan lokal dulu
   try {
-    await fetch(`${TASKS_API}/${taskId}/subtasks`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ subtasks: JSON.stringify(subtasksArray) }),
-    });
-  } catch (err) { console.error("Gagal sinkron subtasks:", err); }
+    await apiCall(`/api/tasks/${taskId}/subtasks`, "PUT", { subtasks: JSON.stringify(subtasksArray) });
+  } catch (err) {
+    console.error("Gagal sinkron subtasks:", err);
+  }
 }
-
-// Hubungkan tombol Atur Kategori di HTML ke sistem kategori bawaan aplikasi
-window.openCategoryModal = window.showCategoryModal;
-
-// ==========================================
-// 🚀 LAZY LOADING & SKELETON
-// ==========================================
 
 // ==========================================
 // 📈 ANALISIS & WAWASAN (INSIGHTS)
@@ -4552,7 +4594,7 @@ function renderAnalisis() {
   const y = today.getFullYear();
 
   // 1. AI Insight Calculation
-  const expsThisMonth = transactions.filter(t => t.type === 'expense' && new Date(t.date).getMonth() === m && new Date(t.date).getFullYear() === y);
+  const expsThisMonth = transactions.filter((t) => t.type === "expense" && new Date(t.date).getMonth() === m && new Date(t.date).getFullYear() === y);
   const aiTextEl = document.getElementById("analisis-ai-text");
   if (aiTextEl) {
     if (expsThisMonth.length === 0) {
@@ -4562,7 +4604,7 @@ function renderAnalisis() {
         acc[t.category] = (acc[t.category] || 0) + t.amount;
         return acc;
       }, {});
-      let topCategory = Object.keys(grouped).reduce((a, b) => grouped[a] > grouped[b] ? a : b);
+      let topCategory = Object.keys(grouped).reduce((a, b) => (grouped[a] > grouped[b] ? a : b));
       let topAmount = grouped[topCategory];
       aiTextEl.innerHTML = `<p class="text-slate-600 dark:text-slate-300">
         Pengeluaran terbesarmu bulan ini ada di kategori <strong>${escapeHtml(topCategory)}</strong> sebesar <strong>${formatCurrency(topAmount)}</strong>. 
@@ -4572,8 +4614,8 @@ function renderAnalisis() {
   }
 
   // 2. Smart Alerts Calculation
-  const currentBalance = transactions.reduce((acc, t) => t.type === 'income' ? acc + t.amount : acc - t.amount, 0);
-  const unpaidBills = bills.filter(b => !b.paid).reduce((acc, b) => acc + b.amount, 0);
+  const currentBalance = transactions.reduce((acc, t) => (t.type === "income" ? acc + t.amount : acc - t.amount), 0);
+  const unpaidBills = bills.filter((b) => !b.paid).reduce((acc, b) => acc + b.amount, 0);
   const alertStatusEl = document.getElementById("analisis-alert-status");
   const alertContentEl = document.getElementById("analisis-alert-content");
 
@@ -4602,20 +4644,21 @@ function renderAnalisis() {
   // 3. Forecasting (Prediksi Goals)
   const forecastListEl = document.getElementById("analisis-forecast-list");
   if (forecastListEl) {
-    const mInc = transactions.filter(t => t.type === 'income' && new Date(t.date).getMonth() === m && new Date(t.date).getFullYear() === y).reduce((s, t) => s + t.amount, 0);
-    const mExp = transactions.filter(t => t.type === 'expense' && new Date(t.date).getMonth() === m && new Date(t.date).getFullYear() === y).reduce((s, t) => s + t.amount, 0);
-    const avgSavings = (mInc - mExp) > 0 ? (mInc - mExp) : 0;
+    const mInc = transactions.filter((t) => t.type === "income" && new Date(t.date).getMonth() === m && new Date(t.date).getFullYear() === y).reduce((s, t) => s + t.amount, 0);
+    const mExp = transactions.filter((t) => t.type === "expense" && new Date(t.date).getMonth() === m && new Date(t.date).getFullYear() === y).reduce((s, t) => s + t.amount, 0);
+    const avgSavings = mInc - mExp > 0 ? mInc - mExp : 0;
 
     if (goals.length === 0) {
       forecastListEl.innerHTML = `<div class="p-3 text-center text-sm text-slate-500 border border-dashed border-slate-200 dark:border-slate-700 rounded-lg">Belum ada data Goals. Manfaatkan fitur Goals untuk mulai menabung!</div>`;
     } else if (avgSavings <= 0) {
       forecastListEl.innerHTML = `<div class="p-3 bg-rose-50 dark:bg-rose-500/10 text-rose-500 text-sm rounded-lg">Tabungan bulanan Anda negatif/nol bulan ini. Tidak dapat memprediksi waktu pencapaian target.</div>`;
     } else {
-      forecastListEl.innerHTML = goals.map(g => {
-        const sisaHitung = g.target - g.saved;
-        if (sisaHitung <= 0) return `<div class="p-3 bg-emerald-50 dark:bg-emerald-500/10 rounded-lg mb-2 text-sm"><span class="font-bold text-emerald-600 dark:text-emerald-400">${escapeHtml(g.name)}</span>: Sudah tercapai! 🎉</div>`;
-        const mos = Math.ceil(sisaHitung / avgSavings);
-        return `
+      forecastListEl.innerHTML = goals
+        .map((g) => {
+          const sisaHitung = g.target - g.saved;
+          if (sisaHitung <= 0) return `<div class="p-3 bg-emerald-50 dark:bg-emerald-500/10 rounded-lg mb-2 text-sm"><span class="font-bold text-emerald-600 dark:text-emerald-400">${escapeHtml(g.name)}</span>: Sudah tercapai! 🎉</div>`;
+          const mos = Math.ceil(sisaHitung / avgSavings);
+          return `
           <div class="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-xl mb-3 border border-light-border dark:border-dark-border">
              <div>
                 <p class="font-bold text-slate-900 dark:text-white text-sm">${escapeHtml(g.name)}</p>
@@ -4627,7 +4670,8 @@ function renderAnalisis() {
              </div>
           </div>
         `;
-      }).join('');
+        })
+        .join("");
     }
   }
 
@@ -4635,7 +4679,7 @@ function renderAnalisis() {
   renderBurnRateChart();
 }
 
-let burnRateChartInstance = null;
+
 function renderBurnRateChart() {
   const canvas = document.getElementById("burn-rate-chart");
   if (!canvas || typeof Chart === "undefined") return;
@@ -4651,16 +4695,14 @@ function renderBurnRateChart() {
   let accum = 0;
 
   for (let i = 1; i <= currentDay; i++) {
-    const dayStr = `${y}-${String(m + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
-    const dailyExp = transactions
-      .filter(t => t.type === 'expense' && t.date && t.date.startsWith(dayStr))
-      .reduce((s, t) => s + t.amount, 0);
+    const dayStr = `${y}-${String(m + 1).padStart(2, "0")}-${String(i).padStart(2, "0")}`;
+    const dailyExp = transactions.filter((t) => t.type === "expense" && t.date && t.date.startsWith(dayStr)).reduce((s, t) => s + t.amount, 0);
     accum += dailyExp;
     data.push(accum);
   }
 
-  const mInc = transactions.filter(t => t.type === 'income' && new Date(t.date).getMonth() === m && new Date(t.date).getFullYear() === y).reduce((s, t) => s + t.amount, 0);
-  const limitValue = mInc > 0 ? mInc : (accum > 0 ? accum * 1.5 : 50000);
+  const mInc = transactions.filter((t) => t.type === "income" && new Date(t.date).getMonth() === m && new Date(t.date).getFullYear() === y).reduce((s, t) => s + t.amount, 0);
+  const limitValue = mInc > 0 ? mInc : accum > 0 ? accum * 1.5 : 50000;
   const idealRate = Array.from({ length: currentDay }, (_, i) => (limitValue / daysInMonth) * (i + 1));
 
   const limitEl = document.getElementById("analisis-burn-limit");
@@ -4683,7 +4725,7 @@ function renderBurnRateChart() {
             borderColor: "#f43f5e",
             backgroundColor: "rgba(244, 63, 94, 0.1)",
             fill: true,
-            tension: 0.4
+            tension: 0.4,
           },
           {
             label: "Limit Pemasukan Ideal",
@@ -4691,25 +4733,25 @@ function renderBurnRateChart() {
             borderColor: "#10b981",
             borderDash: [5, 5],
             fill: false,
-            tension: 0
-          }
-        ]
+            tension: 0,
+          },
+        ],
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
-          legend: { display: true, position: 'bottom' },
+          legend: { display: true, position: "bottom" },
           tooltip: {
             callbacks: {
               label: (ctx) => " " + formatCurrency(ctx.raw),
-            }
-          }
+            },
+          },
         },
         scales: {
           y: { beginAtZero: true },
-        }
-      }
+        },
+      },
     });
   }
 }
@@ -4729,40 +4771,738 @@ window.handleLazyRender = function (view) {
   // Delay tipis untuk efek transisi yang mulus
   setTimeout(() => {
     switch (view) {
-      case 'pemasukan': if (typeof renderPemasukan === 'function') renderPemasukan(); break;
-      case 'pengeluaran': if (typeof renderPengeluaran === 'function') renderPengeluaran(); break;
-      case 'task': if (typeof renderTasks === 'function') renderTasks(); break;
-      case 'goals': if (typeof renderGoals === 'function') renderGoals(); break;
-      case 'bills': if (typeof renderBills === 'function') renderBills(); break;
-      case 'shifts': if (typeof renderShifts === 'function') renderShifts(); break;
-      case 'aset': if (typeof renderAssets === 'function') renderAssets(); break;
-      case 'analisis': if (typeof renderAnalisis === 'function') renderAnalisis(); break;
+      case "pemasukan":
+        if (typeof renderPemasukan === "function") renderPemasukan();
+        break;
+      case "pengeluaran":
+        if (typeof renderPengeluaran === "function") renderPengeluaran();
+        break;
+      case "task":
+        if (typeof renderTasks === "function") renderTasks();
+        break;
+      case "goals":
+        if (typeof renderGoals === "function") renderGoals();
+        break;
+      case "bills":
+        if (typeof renderBills === "function") renderBills();
+        break;
+      case "shifts":
+        if (typeof renderShifts === "function") renderShifts();
+        break;
+      case "aset":
+        if (typeof renderAssets === "function") renderAssets();
+        break;
+      case "analisis":
+        if (typeof renderAnalisis === "function") renderAnalisis();
+        break;
     }
   }, 150);
-}
+};
 
 window.showSkeleton = function (container) {
   container.innerHTML = `
-      < div class="space-y-4 w-full p-4" >
+      <div class="space-y-4 w-full p-4">
       <div class="skeleton h-24 w-full rounded-2xl"></div>
       <div class="skeleton h-24 w-full rounded-2xl"></div>
       <div class="skeleton h-24 w-full rounded-2xl"></div>
-    </div > `;
-}
+    </div>`;
+};
 
 window.getViewContainerId = function (view) {
   const map = {
-    'pemasukan': 'pemasukan-history',
-    'pengeluaran': 'pengeluaran-history',
-    'task': 'task-list',
-    'goals': 'goals-list',
-    'bills': 'bills-list',
-    'shifts': 'shifts-list',
-    'aset': 'asset-list',
-    'analisis': null
+    pemasukan: "pemasukan-history",
+    pengeluaran: "pengeluaran-history",
+    task: "task-list",
+    goals: "goals-list",
+    bills: "bills-list",
+    shifts: "shifts-list",
+    aset: "asset-list",
+    analisis: null,
   };
   return map[view];
+};
+
+// Hubungkan tombol Atur Kategori di HTML ke sistem kategori bawaan aplikasi
+window.openCategoryModal = window.showCategoryModal;
+
+
+
+
+
+// API CONFIGURATION
+// =====================================================================
+
+// Helper function untuk API requests dengan JWT token
+async function apiCall(endpoint, method = "GET", body = null) {
+  const token = localStorage.getItem("auth_token");
+  const headers = {
+    "Content-Type": "application/json",
+  };
+
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  const config = {
+    method,
+    headers,
+  };
+
+  if (body) {
+    config.body = JSON.stringify(body);
+  }
+
+  try {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, config);
+    const data = await response.json();
+
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        logout();
+      }
+      throw { status: response.status, ...data };
+    }
+
+    return data;
+  } catch (error) {
+    throw error;
+  }
 }
 
+// =====================================================================
+// USER AUTH & SESSION (FIXED)
+// =====================================================================
+// Mengambil data dari localStorage tanpa menimpa dengan default user
+
+function saveSession(user, token) {
+  localStorage.setItem("budget_current_user", JSON.stringify(user));
+  localStorage.setItem("auth_token", token);
+  currentUser = user;
+  authToken = token;
+}
+
+function logout() {
+  localStorage.removeItem("budget_current_user");
+  localStorage.removeItem("auth_token");
+  currentUser = null;
+  authToken = null;
+  location.reload(); // Refresh untuk kembali ke layar login
+}
+
+// =====================================================================
+// UTILITY FUNCTIONS
+
+function setEl(id, text) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = text;
+}
+
+function escapeHtml(unsafe) {
+  if (typeof unsafe !== "string") return unsafe;
+  return String(unsafe).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+}
+
+function showToast(msg, type = "success") {
+  const container = document.getElementById("toast-container");
+  if (!container) return;
+  const icons = { success: "ph-check-circle", error: "ph-x-circle", info: "ph-info" };
+  const colors = { success: "bg-emerald-500", error: "bg-rose-500", info: "bg-primary" };
+  const toast = document.createElement("div");
+  toast.className = `flex items-center gap-3 ${colors[type] || colors.success} text-white px-5 py-3.5 rounded-lg shadow-lg text-sm font-medium max-w-xs translate-x-full transition-transform duration-300`;
+  toast.innerHTML = `<i class="${icons[type] || icons.success} text-xl flex-shrink-0"></i><span>${msg}</span>`;
+  container.appendChild(toast);
+  requestAnimationFrame(() => requestAnimationFrame(() => toast.classList.remove("translate-x-full")));
+  setTimeout(() => {
+    toast.classList.add("translate-x-full");
+    toast.addEventListener("transitionend", () => toast.remove());
+  }, 3000);
+}
+
+window.showCustomConfirm = function (message, onConfirm) {
+  const modal = document.getElementById("custom-confirm-modal");
+  const msgEl = document.getElementById("confirm-message");
+  const btnOk = document.getElementById("confirm-btn-ok");
+  const btnCancel = document.getElementById("confirm-btn-cancel");
+
+  if (!modal) {
+    if (window.confirm(message)) onConfirm();
+    return;
+  }
+
+  if (msgEl) msgEl.textContent = message;
+  modal.classList.remove("hidden");
+
+  const hideModal = () => modal.classList.add("hidden");
+  if (btnCancel) btnCancel.onclick = hideModal;
+  if (btnOk) btnOk.onclick = () => { hideModal(); if (onConfirm) onConfirm(); };
+};
+
+function showCustomConfirm(message, onConfirm) {
+  window.showCustomConfirm(message, onConfirm);
+}
+
+function toggleTheme() {
+  const htmlEl = document.documentElement;
+  htmlEl.classList.toggle("dark");
+  const isDark = htmlEl.classList.contains("dark");
+  localStorage.setItem("theme", isDark ? "dark" : "light");
+  const themeText = document.querySelector(".theme-text");
+  if (themeText) themeText.textContent = isDark ? "Light" : "Dark";
+}
+
+function toggleProfileDropdown() {
+  const dropdown = document.getElementById("profile-dropdown");
+  if (dropdown) {
+    dropdown.classList.toggle("hidden");
+  }
+}
+
+// Close profile dropdown when clicking outside
+document.addEventListener("click", (e) => {
+  const dropdown = document.getElementById("profile-dropdown");
+  const btn = document.getElementById("profile-dropdown-btn");
+  if (dropdown && btn && !btn.contains(e.target) && !dropdown.contains(e.target)) {
+    dropdown.classList.add("hidden");
+  }
+});
 
 
+function updateUserUI(user) {
+  if (!user) return;
+  const avatarUrl = user.photo ? user.photo : `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=6366f1&color=fff`;
+  ["sidebar-avatar", "topbar-avatar", "settings-avatar"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) { el.src = avatarUrl; el.style.objectFit = "cover"; }
+  });
+  setEl("sidebar-name", user.name);
+  setEl("topbar-name", user.name);
+  setEl("settings-name", user.name);
+  setEl("sidebar-email", user.email);
+  setEl("topbar-email", user.email);
+  setEl("settings-email", user.email);
+}
+
+function loginUser(user) {
+  loadUserData();
+  document.getElementById("auth-screen").classList.add("hidden");
+  updateUserUI(user);
+
+  if (typeof getTransactionsFromDB === "function") getTransactionsFromDB();
+  if (typeof getGoalsFromDB === "function") getGoalsFromDB();
+  if (typeof getBillsFromDB === "function") getBillsFromDB();
+  if (typeof getShiftsFromDB === "function") getShiftsFromDB();
+  if (typeof getTasksFromDB === "function") getTasksFromDB();
+  if (typeof getCategoriesFromDB === "function") getCategoriesFromDB();
+  if (typeof getRecurringFromDB === "function") getRecurringFromDB();
+  if (typeof getDebtsFromDB === "function") getDebtsFromDB();
+  if (typeof getBudgetsFromDB === "function") getBudgetsFromDB();
+  if (typeof getAssetsFromDB === "function") getAssetsFromDB();
+
+  if (typeof updateDashboard === "function") updateDashboard();
+  if (typeof renderPemasukan === "function") renderPemasukan();
+  if (typeof renderPengeluaran === "function") renderPengeluaran();
+  if (typeof renderGoals === "function") renderGoals();
+  if (typeof renderBills === "function") renderBills();
+  if (typeof renderShifts === "function") renderShifts();
+}
+
+// =====================================================================
+// UI & SKELETON
+// =====================================================================
+window.showSkeleton = function (container) {
+  if (!container) return;
+  container.innerHTML = `
+    <div class="space-y-4 w-full p-4">
+      <div class="skeleton h-24 w-full rounded-2xl bg-slate-200 animate-pulse"></div>
+      <div class="skeleton h-24 w-full rounded-2xl bg-slate-200 animate-pulse"></div>
+      <div class="skeleton h-24 w-full rounded-2xl bg-slate-200 animate-pulse"></div>
+    </div>`;
+};
+
+// =====================================================================
+// DATA FETCHING (FIXED API CALLS)
+// =====================================================================
+
+async function getTasksFromDB() {
+  if (!currentUser) return;
+  const container = document.getElementById('task-list');
+  showSkeleton(container);
+
+  try {
+    const data = await apiCall("/api/tasks");
+    tasks = data.map((t) => ({
+      id: t.id,
+      title: t.title,
+      status: t.status,
+      dueDate: t.due_date,
+      priority: t.priority,
+      tag: t.tag,
+      subtasks: JSON.parse(t.subtasks || "[]"),
+    }));
+    renderTasks();
+  } catch (e) {
+    console.error("Gagal mengambil tugas:", e);
+  }
+}
+
+async function getBudgetsFromDB() {
+  try {
+    const data = await apiCall("/api/budgets");
+    budgets = data.map((b) => ({
+      id: b.id,
+      category: b.category,
+      limit: Number(b.amount),
+      month: b.month,
+    }));
+    if (typeof renderBudgets === "function") renderBudgets();
+  } catch (e) {
+    console.warn("getBudgetsFromDB error:", e);
+  }
+}
+
+// =====================================================================
+// INITIALIZATION
+// =====================================================================
+document.addEventListener("DOMContentLoaded", () => {
+  console.log("KaneBuddy: DOMContentLoaded fired");
+  const authScreen = document.getElementById("auth-screen");
+  const mainApp = document.getElementById("document-root") || document.body; // Assuming you have a wrapper or just let auth screen overlay
+
+  if (currentUser && localStorage.getItem("auth_token")) {
+    // User authenticated
+    if (authScreen) authScreen.classList.add("hidden");
+
+    loadUserData();
+    updateUserUI(currentUser);
+
+    if (typeof getTransactionsFromDB === "function") getTransactionsFromDB();
+    if (typeof getGoalsFromDB === "function") getGoalsFromDB();
+    if (typeof getBillsFromDB === "function") getBillsFromDB();
+    if (typeof getShiftsFromDB === "function") getShiftsFromDB();
+    if (typeof getTasksFromDB === "function") getTasksFromDB();
+    if (typeof getCategoriesFromDB === "function") getCategoriesFromDB();
+    if (typeof getRecurringFromDB === "function") getRecurringFromDB();
+    if (typeof getDebtsFromDB === "function") getDebtsFromDB();
+    if (typeof getBudgetsFromDB === "function") getBudgetsFromDB();
+  } else {
+    // No session: Show login screen
+    console.log("No session found. Showing login screen...");
+    if (authScreen) {
+      authScreen.classList.remove("hidden");
+      // Resets the auth tabs
+      showAuthTab("login");
+    }
+  }
+
+  // Date display
+  const dateEl = document.getElementById("page-date");
+  if (dateEl) dateEl.textContent = new Date().toLocaleDateString("id-ID", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+
+  // Theme
+  const themeBtn = document.getElementById("theme-toggle");
+  if (localStorage.getItem("theme") === "dark") {
+    document.documentElement.classList.add("dark");
+  }
+  if (themeBtn) themeBtn.addEventListener("click", toggleTheme);
+
+  // Profile dropdown
+  const profileBtn = document.getElementById("profile-dropdown-btn");
+  if (profileBtn) profileBtn.addEventListener("click", toggleProfileDropdown);
+
+  // ===== NAVIGATION =====
+  const navItems = document.querySelectorAll(".nav-item");
+  const viewSections = document.querySelectorAll(".view-section");
+  const pageTitle = document.getElementById("page-title");
+  navItems.forEach((item) => {
+    item.addEventListener("click", (e) => {
+      e.preventDefault();
+      navItems.forEach((n) => {
+        n.classList.remove("active");
+        n.classList.add("text-slate-500");
+      });
+      item.classList.add("active");
+      item.classList.remove("text-slate-500");
+      viewSections.forEach((v) => {
+        v.classList.remove("active");
+        v.classList.add("hidden");
+      });
+      const viewName = item.getAttribute("data-view");
+
+      if (typeof handleLazyRender === "function") {
+        handleLazyRender(viewName);
+      }
+
+      const sel = document.getElementById(`view-${viewName}`);
+      if (sel) {
+        sel.classList.remove("hidden");
+        sel.classList.add("active");
+        sel.classList.remove("animate-fade-in");
+        void sel.offsetWidth;
+        sel.classList.add("animate-fade-in");
+      }
+      if (pageTitle) pageTitle.textContent = item.querySelector("span").textContent;
+      const ca = document.getElementById("content-area");
+      if (ca) ca.scrollTop = 0;
+      const sidebarEl = document.querySelector("aside");
+      if (window.innerWidth < 768 && sidebarEl && !sidebarEl.classList.contains("hidden")) toggleMobileMenu(false);
+    });
+  });
+
+  // ===== MOBILE MENU =====
+  const mobileBtn = document.getElementById("mobile-menu-btn");
+  const desktopBtn = document.getElementById("desktop-menu-btn");
+  const sidebar = document.querySelector("aside");
+  const overlay = document.getElementById("mobile-overlay");
+
+  function toggleMobileMenu(show) {
+    if (!sidebar || !overlay) return;
+    if (show) {
+      sidebar.classList.remove("hidden");
+      sidebar.classList.add("fixed", "inset-y-0", "left-0", "z-50", "w-64");
+      overlay.classList.remove("hidden");
+      requestAnimationFrame(() => {
+        overlay.classList.remove("opacity-0");
+        overlay.classList.add("opacity-100");
+      });
+    } else {
+      overlay.classList.remove("opacity-100");
+      overlay.classList.add("opacity-0");
+      setTimeout(() => {
+        sidebar.classList.add("hidden");
+        sidebar.classList.remove("fixed", "inset-y-0", "left-0", "z-50", "w-64");
+        overlay.classList.add("hidden");
+      }, 300);
+    }
+  }
+  if (mobileBtn) mobileBtn.addEventListener("click", () => toggleMobileMenu(true));
+  if (overlay) overlay.addEventListener("click", () => toggleMobileMenu(false));
+  if (desktopBtn)
+    desktopBtn.addEventListener("click", () => {
+      if (sidebar) {
+        sidebar.classList.toggle("w-64");
+        sidebar.classList.toggle("w-20");
+        document.querySelectorAll(".sidebar-text").forEach((el) => el.classList.toggle("hidden"));
+        document.querySelectorAll("#sidebar-desktop .nav-item").forEach((el) => {
+          el.classList.toggle("px-4");
+          el.classList.toggle("justify-center");
+        });
+        const exportBtn = document.querySelector("#sidebar-desktop button");
+        if (exportBtn) { exportBtn.classList.toggle("px-4"); exportBtn.classList.toggle("justify-center"); }
+        const logoDiv = document.querySelector("#sidebar-desktop .h-16");
+        if (logoDiv) { logoDiv.classList.toggle("px-6"); logoDiv.classList.toggle("justify-center"); }
+      }
+    });
+
+  // ===== FORM PEMASUKAN =====
+  const formPemasukan = document.getElementById("form-pemasukan");
+  if (formPemasukan)
+    formPemasukan.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const desc = (document.getElementById("input-pemasukan-judul")?.value || "").trim() || "Pemasukan";
+      const amount = parseFloat(document.getElementById("input-pemasukan-jumlah")?.value) || 0;
+      const date = document.getElementById("input-pemasukan-tanggal")?.value || new Date().toISOString().split("T")[0];
+      const category = document.getElementById("input-pemasukan-sumber")?.value || "Lainnya";
+      if (!desc) { showToast("Judul tidak boleh kosong", "error"); return; }
+      if (!amount || amount <= 0) { showToast("Jumlah harus > 0", "error"); return; }
+      saveTransactionToDB("income", amount, category, date, desc, false);
+      formPemasukan.reset();
+      const dtEl = document.getElementById("input-pemasukan-tanggal");
+      if (dtEl) dtEl.value = new Date().toISOString().split("T")[0];
+      const fs = document.getElementById("pemasukan-form-section");
+      if (fs) fs.classList.add("hidden");
+    });
+
+  // ===== FORM PENGELUARAN =====
+  const formPengeluaran = document.getElementById("form-pengeluaran");
+  if (formPengeluaran)
+    formPengeluaran.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const title = document.getElementById("input-pengeluaran-judul").value.trim();
+      const amount = parseInt(document.getElementById("input-pengeluaran-jumlah").value);
+      const category = document.getElementById("input-pengeluaran-kategori").value;
+      const dateVal = document.getElementById("input-pengeluaran-tanggal").value;
+      if (!title) { showToast("Judul tidak boleh kosong", "error"); return; }
+      if (!amount || amount <= 0) { showToast("Jumlah harus > 0", "error"); return; }
+      saveTransactionToDB("expense", amount, category, dateVal || new Date().toISOString().split("T")[0], title, false);
+      formPengeluaran.reset();
+      document.getElementById("input-pengeluaran-tanggal").value = new Date().toISOString().split("T")[0];
+      document.getElementById("pengeluaran-form-section").classList.add("hidden");
+    });
+
+  // ===== FORM GOAL =====
+  const formGoal = document.getElementById("form-goal");
+  if (formGoal)
+    formGoal.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const name = document.getElementById("input-goal-name").value.trim();
+      const target = parseInt(document.getElementById("input-goal-target").value);
+      const saved = parseInt(document.getElementById("input-goal-saved").value) || 0;
+      const deadline = document.getElementById("input-goal-deadline").value;
+      const color = document.getElementById("input-goal-color").value;
+      const icon = document.getElementById("input-goal-icon").value;
+      if (!name) { showToast("Nama goal tidak boleh kosong", "error"); return; }
+      if (!target || target <= 0) { showToast("Target harus > 0", "error"); return; }
+      saveGoalToDB(name, target, saved, deadline, color, icon);
+      formGoal.reset();
+      document.getElementById("goal-form-section").classList.add("hidden");
+      showToast("Goal berhasil ditambahkan ke database!");
+    });
+
+  // ===== FORM BILL =====
+  const formBill = document.getElementById("form-bill");
+  if (formBill)
+    formBill.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const name = document.getElementById("input-bill-name").value.trim();
+      const amount = parseInt(document.getElementById("input-bill-amount").value);
+      const dueDate = document.getElementById("input-bill-duedate").value;
+      const category = document.getElementById("input-bill-category").value;
+      if (!name) { showToast("Nama tagihan tidak boleh kosong", "error"); return; }
+      if (!amount || amount <= 0) { showToast("Jumlah harus > 0", "error"); return; }
+      if (!dueDate) { showToast("Tanggal jatuh tempo WAJIB diisi!", "error"); return; }
+      saveBillToDB(name, amount, dueDate, category, false);
+      formBill.reset();
+      document.getElementById("bill-form-section").classList.add("hidden");
+      showToast("Tagihan berhasil ditambahkan ke database!");
+    });
+
+  // ===== FORM SHIFT =====
+  const formShift = document.getElementById("form-shift");
+  if (formShift) {
+    const shiftTypeSelect = document.getElementById("input-shift-type");
+    if (shiftTypeSelect)
+      shiftTypeSelect.addEventListener("change", () => {
+        const t = SHIFT_TYPES[shiftTypeSelect.value];
+        if (!t) return;
+        document.getElementById("input-shift-start").value = t.startDefault;
+        document.getElementById("input-shift-end").value = t.endDefault;
+        const nhEl = document.getElementById("input-shift-normal-hours");
+        if (nhEl) nhEl.value = t.normalHours;
+        const isOff = shiftTypeSelect.value === "OffDay";
+        ["input-shift-start", "input-shift-end", "input-shift-rate", "input-shift-normal-hours"].forEach((id) => {
+          const el = document.getElementById(id);
+          if (el) el.disabled = isOff;
+        });
+      });
+
+    formShift.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const date = document.getElementById("input-shift-date").value;
+      const type = document.getElementById("input-shift-type").value;
+      const startTime = document.getElementById("input-shift-start").value;
+      const endTime = document.getElementById("input-shift-end").value;
+      const normalHrsInput = parseFloat(document.getElementById("input-shift-normal-hours").value) || 0;
+      const hourlyRate = parseInt(document.getElementById("input-shift-rate").value) || 0;
+      const otRateInput = parseInt(document.getElementById("input-shift-ot-rate").value) || 0;
+      const isOff = type === "OffDay";
+      const isLembur = type === "Lembur";
+      let hours = 0, normalHoursWorked = 0, overtimeHours = 0, earnings = 0;
+      if (!isOff) {
+        hours = calcShiftHours(startTime, endTime);
+        if (isLembur) { normalHoursWorked = 0; overtimeHours = hours; }
+        else { normalHoursWorked = Math.min(hours, normalHrsInput); overtimeHours = Math.max(0, hours - normalHrsInput); }
+        const otRate = otRateInput > 0 ? otRateInput : Math.round(hourlyRate * 1.5);
+        earnings = Math.round(normalHoursWorked * hourlyRate + overtimeHours * otRate);
+      }
+      saveShiftToDB({ date, type, startTime, endTime, hours, normalHoursWorked, overtimeHours, hourlyRate, earnings });
+      formShift.reset();
+      document.getElementById("shift-form-section").classList.add("hidden");
+      document.getElementById("input-shift-date").value = new Date().toISOString().split("T")[0];
+      document.getElementById("input-shift-start").value = "08:00";
+      document.getElementById("input-shift-end").value = "16:00";
+      const nhEl2 = document.getElementById("input-shift-normal-hours");
+      if (nhEl2) nhEl2.value = "8";
+      ["input-shift-start", "input-shift-end", "input-shift-rate", "input-shift-normal-hours"].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.disabled = false;
+      });
+      showToast("Shift berhasil disimpan...");
+    });
+  }
+
+  // ===== TOGGLE BUTTONS =====
+  const btnTogglePemasukan = document.getElementById("btn-toggle-pemasukan-form");
+  const formSectionPemasukan = document.getElementById("pemasukan-form-section");
+  const btnCancelPemasukan = document.getElementById("btn-cancel-pemasukan");
+  if (btnTogglePemasukan && formSectionPemasukan) btnTogglePemasukan.addEventListener("click", () => { formSectionPemasukan.classList.toggle("hidden"); if (!formSectionPemasukan.classList.contains("hidden")) formSectionPemasukan.scrollIntoView({ behavior: "smooth" }); });
+  if (btnCancelPemasukan && formSectionPemasukan) btnCancelPemasukan.addEventListener("click", () => formSectionPemasukan.classList.add("hidden"));
+
+  const btnTogglePengeluaran = document.getElementById("btn-toggle-pengeluaran-form");
+  const formSectionPengeluaran = document.getElementById("pengeluaran-form-section");
+  const btnCancelPengeluaran = document.getElementById("btn-cancel-pengeluaran");
+  if (btnTogglePengeluaran && formSectionPengeluaran) btnTogglePengeluaran.addEventListener("click", () => { formSectionPengeluaran.classList.toggle("hidden"); if (!formSectionPengeluaran.classList.contains("hidden")) formSectionPengeluaran.scrollIntoView({ behavior: "smooth" }); });
+  if (btnCancelPengeluaran && formSectionPengeluaran) btnCancelPengeluaran.addEventListener("click", () => formSectionPengeluaran.classList.add("hidden"));
+
+  const btnAddBillTop = document.getElementById("btn-add-bill-top");
+  if (btnAddBillTop) btnAddBillTop.addEventListener("click", () => { const s = document.getElementById("bill-form-section"); s.classList.toggle("hidden"); if (!s.classList.contains("hidden")) s.scrollIntoView({ behavior: "smooth" }); });
+  const btnCancelBill = document.getElementById("btn-cancel-bill");
+  if (btnCancelBill) btnCancelBill.addEventListener("click", () => document.getElementById("bill-form-section").classList.add("hidden"));
+
+  const btnAddGoalTop = document.getElementById("btn-add-goal-top");
+  if (btnAddGoalTop) btnAddGoalTop.addEventListener("click", () => { const s = document.getElementById("goal-form-section"); s.classList.toggle("hidden"); if (!s.classList.contains("hidden")) s.scrollIntoView({ behavior: "smooth" }); });
+  const btnCancelGoal = document.getElementById("btn-cancel-goal");
+  if (btnCancelGoal) btnCancelGoal.addEventListener("click", () => document.getElementById("goal-form-section").classList.add("hidden"));
+
+  const btnAddShiftTop = document.getElementById("btn-add-shift-top");
+  if (btnAddShiftTop) btnAddShiftTop.addEventListener("click", () => { const s = document.getElementById("shift-form-section"); s.classList.toggle("hidden"); if (!s.classList.contains("hidden")) s.scrollIntoView({ behavior: "smooth" }); });
+  const btnCancelShift = document.getElementById("btn-cancel-shift");
+  if (btnCancelShift) btnCancelShift.addEventListener("click", () => document.getElementById("shift-form-section").classList.add("hidden"));
+  const btnRecordShift = document.getElementById("btn-record-shift-income");
+  if (btnRecordShift) btnRecordShift.addEventListener("click", recordShiftAsIncome);
+
+  // ===== QUICK ACTIONS & FAB =====
+  const quickIncome = document.getElementById("quick-income");
+  const quickExpense = document.getElementById("quick-expense");
+  if (quickIncome) quickIncome.addEventListener("click", () => document.querySelector('[data-view="pemasukan"]').click());
+  if (quickExpense) quickExpense.addEventListener("click", () => document.querySelector('[data-view="pengeluaran"]').click());
+  const fab = document.getElementById("fab-add");
+  if (fab) fab.addEventListener("click", () => document.querySelector('[data-view="pemasukan"]').click());
+
+  // ===== DEFAULT DATES =====
+  const todayStr = new Date().toISOString().split("T")[0];
+  ["input-pemasukan-tanggal", "input-pengeluaran-tanggal", "input-shift-date"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.value = todayStr;
+  });
+
+  // ===== FILTERS =====
+  const fpSearch = document.getElementById("filter-pemasukan-search");
+  if (fpSearch) fpSearch.addEventListener("input", () => { currentPemasukanPage = 1; renderPemasukan(); });
+  const fpSort = document.getElementById("filter-pemasukan-sort");
+  if (fpSort) fpSort.addEventListener("change", () => { currentPemasukanPage = 1; renderPemasukan(); });
+  const feSearch = document.getElementById("filter-pengeluaran-search");
+  if (feSearch) feSearch.addEventListener("input", () => { currentPengeluaranPage = 1; renderPengeluaran(); });
+  const feSort = document.getElementById("filter-pengeluaran-sort");
+  if (feSort) feSort.addEventListener("change", () => { currentPengeluaranPage = 1; renderPengeluaran(); });
+  const feCat = document.getElementById("filter-pengeluaran-cat");
+  if (feCat) feCat.addEventListener("change", () => { currentPengeluaranPage = 1; renderPengeluaran(); });
+
+  // ===== CUSTOM CATEGORY =====
+  const btnAddCat = document.getElementById("btn-add-category");
+  if (btnAddCat) {
+    btnAddCat.addEventListener("click", () => {
+      const nameInput = document.getElementById("input-new-category-name");
+      const colorInput = document.getElementById("input-new-category-color");
+      const name = nameInput.value.trim();
+      if (!name) { showToast("Nama kategori tidak boleh kosong", "error"); return; }
+      if (categories.find((c) => c.name.toLowerCase() === name.toLowerCase())) { showToast("Kategori sudah ada", "error"); return; }
+      addCustomCategoryToDB(name, colorInput.value);
+      nameInput.value = "";
+    });
+  }
+
+  // ===== SHIFT PICKERS =====
+  function handleShiftMonthChange(e) {
+    if (e.target.value) {
+      currentShiftViewDate = new Date(e.target.value + "-01T00:00:00");
+      if (typeof updateShiftSummary === "function") updateShiftSummary();
+      if (typeof renderShiftCalendar === "function") renderShiftCalendar();
+    }
+  }
+  const shiftLinePicker = document.getElementById("shift-line-chart-picker");
+  if (shiftLinePicker) shiftLinePicker.addEventListener("change", handleShiftMonthChange);
+  const shiftCalendarPicker = document.getElementById("shift-calendar-picker");
+  if (shiftCalendarPicker) shiftCalendarPicker.addEventListener("change", handleShiftMonthChange);
+
+  // ===== INITIAL RENDER =====
+  if (currentUser) {
+    if (typeof renderCategoriesDropdown === "function") renderCategoriesDropdown();
+    if (typeof checkRecurringTransactions === "function") checkRecurringTransactions();
+    if (typeof updateDashboard === "function") updateDashboard();
+    if (typeof renderPemasukan === "function") renderPemasukan();
+    if (typeof renderPengeluaran === "function") renderPengeluaran();
+    if (typeof renderGoals === "function") renderGoals();
+    if (typeof renderBills === "function") renderBills();
+    if (typeof renderShifts === "function") renderShifts();
+    if (typeof renderTasks === "function") renderTasks();
+    if (typeof renderRecurringList === "function") renderRecurringList();
+    if (typeof getAssetsFromDB === "function") getAssetsFromDB();
+  }
+
+  // ===== RECURRING FORM =====
+  const formReq = document.getElementById("form-recurring");
+  if (formReq) {
+    formReq.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const name = document.getElementById("input-req-name").value.trim();
+      const amount = parseInt(document.getElementById("input-req-amount").value);
+      const type = document.getElementById("input-req-type").value;
+      const category = document.getElementById("input-req-category").value;
+      const date = parseInt(document.getElementById("input-req-date").value);
+      if (!name) { showToast("Nama tagihan rutin harus diisi", "error"); return; }
+      if (!amount || amount <= 0) { showToast("Jumlah harus > 0", "error"); return; }
+      if (!date || date < 1 || date > 31) { showToast("Tanggal jatuh tempo (1-31) tidak valid", "error"); return; }
+      recurring.push({ id: uid(), name, amount, type, category, date, lastProcessedMonth: null });
+      saveAll();
+      formReq.reset();
+      if (typeof closeRecurringModal === "function") closeRecurringModal();
+      if (typeof renderRecurringList === "function") renderRecurringList();
+      showToast("Tagihan rutin berhasil dibuat!");
+    });
+  }
+
+  // ===== SPENDING FLOW TABS =====
+  document.querySelectorAll(".spending-flow-tab").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      document.querySelectorAll(".spending-flow-tab").forEach((b) => {
+        b.classList.remove("active", "bg-white", "dark:bg-slate-700", "shadow-sm", "text-slate-800", "dark:text-white");
+        b.classList.add("text-slate-500", "dark:text-slate-400");
+      });
+      const t = e.target;
+      t.classList.add("active", "bg-white", "dark:bg-slate-700", "shadow-sm", "text-slate-800", "dark:text-white");
+      t.classList.remove("text-slate-500", "dark:text-slate-400");
+      spendingFlowPeriod = t.getAttribute("data-period");
+      const customDateEl = document.getElementById("spending-flow-custom-date");
+      if (spendingFlowPeriod === "custom") { customDateEl.classList.remove("hidden"); }
+      else { customDateEl.classList.add("hidden"); renderSpendingFlowChart(); }
+    });
+  });
+  const flowApplyBtn = document.getElementById("flow-custom-apply");
+  if (flowApplyBtn)
+    flowApplyBtn.addEventListener("click", () => {
+      spendingFlowCustomStart = document.getElementById("flow-start-date").value;
+      spendingFlowCustomEnd = document.getElementById("flow-end-date").value;
+      if (spendingFlowCustomStart && spendingFlowCustomEnd) renderSpendingFlowChart();
+      else showToast("Pilih range tanggal terlebih dahulu", "error");
+    });
+
+  // ===== CATEGORY FLOW TABS =====
+  document.querySelectorAll(".cat-flow-tab").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      document.querySelectorAll(".cat-flow-tab").forEach((b) => {
+        b.classList.remove("active", "bg-white", "dark:bg-slate-700", "shadow-sm", "text-slate-800", "dark:text-white");
+        b.classList.add("text-slate-500", "dark:text-slate-400");
+      });
+      const t = e.target;
+      t.classList.add("active", "bg-white", "dark:bg-slate-700", "shadow-sm", "text-slate-800", "dark:text-white");
+      t.classList.remove("text-slate-500", "dark:text-slate-400");
+      catFlowPeriod = t.getAttribute("data-period");
+      const customDateEl = document.getElementById("cat-custom-date");
+      if (catFlowPeriod === "custom") { customDateEl.classList.remove("hidden"); }
+      else { customDateEl.classList.add("hidden"); renderCategoryPieChart(); }
+    });
+  });
+  const catApplyBtn = document.getElementById("cat-custom-apply");
+  if (catApplyBtn)
+    catApplyBtn.addEventListener("click", () => {
+      catFlowCustomStart = document.getElementById("cat-start-date").value;
+      catFlowCustomEnd = document.getElementById("cat-end-date").value;
+      if (catFlowCustomStart && catFlowCustomEnd) renderCategoryPieChart();
+      else showToast("Pilih range tanggal terlebih dahulu", "error");
+    });
+
+  // ===== SHIFT FLOW TABS =====
+  document.querySelectorAll(".shift-flow-tab").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      document.querySelectorAll(".shift-flow-tab").forEach((b) => {
+        b.classList.remove("active", "bg-white", "dark:bg-slate-700", "shadow-sm", "text-slate-800", "dark:text-white");
+        b.classList.add("text-slate-500", "dark:text-slate-400");
+      });
+      const t = e.target;
+      t.classList.add("active", "bg-white", "dark:bg-slate-700", "shadow-sm", "text-slate-800", "dark:text-white");
+      t.classList.remove("text-slate-500", "dark:text-slate-400");
+      shiftChartPeriod = t.getAttribute("data-period");
+      if (typeof updateShiftSummary === "function") updateShiftSummary();
+    });
+  });
+});
