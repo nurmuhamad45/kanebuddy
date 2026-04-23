@@ -26,6 +26,34 @@ let transactions = [], goals = [], bills = [], shifts = [], tasks = [],
   categories = [], recurring = [], debts = [], budgets = [], assets = [],
   remittances = [], documentsData = [], nenkinData = [];
 
+// =====================================================================
+// WINDOW FUNCTIONS FOR ASSETS (Moved to top for reliability)
+// =====================================================================
+window.updateAssetValue = function (id) {
+  const a = assets.find((x) => String(x.id) === String(id));
+  if (!a) {
+    console.error("Asset not found:", id);
+    return;
+  }
+  const newName = prompt(`Ubah nama aset:`, a.name);
+  if (newName === null) return;
+  const newValue = prompt(`Ubah nilai aset (¥):`, a.value);
+  if (newValue === null || isNaN(parseInt(newValue)) || parseInt(newValue) < 0) return;
+
+  if (typeof updateAssetValueInDB === "function") {
+    updateAssetValueInDB(id, newName || a.name, a.type, parseInt(newValue), a.purchase_date, a.notes);
+    showToast("Memperbarui data aset...");
+  }
+};
+
+window.deleteAsset = function (id) {
+  if (!confirm("Yakin ingin menghapus aset ini?")) return;
+  if (typeof deleteAssetFromDB === "function") {
+    deleteAssetFromDB(id);
+    showToast("Menghapus aset...");
+  }
+};
+
 // CHART INSTANCES
 let taskChartInstance = null;
 let spendingFlowChartInstance = null;
@@ -181,9 +209,16 @@ async function handleRegister(e) {
 
     if (errEl) errEl.classList.add("hidden");
 
-    // Simpan sesi JWT
-    saveSession(data.user, data.token);
-    loginUser(data.user);
+    if (data.requireActivation) {
+      alert(data.message);
+      // Switch back to login tab
+      const tabLogin = document.getElementById("tab-login");
+      if (tabLogin) tabLogin.click();
+    } else {
+      // Legacy behavior if activation not required
+      saveSession(data.user, data.token);
+      loginUser(data.user);
+    }
   } catch (err) {
     console.error(err);
     if (errEl) errEl.classList.remove("hidden");
@@ -192,6 +227,24 @@ async function handleRegister(e) {
     } else {
       if (span) span.textContent = err.error || "Registrasi gagal. Email mungkin sudah terdaftar.";
     }
+  }
+}
+
+async function activateAccount(token) {
+  try {
+    const res = await apiCall(`/api/auth/activate/${token}`, "GET");
+    if (res.success) {
+      alert(res.message || "Akun berhasil diaktifkan! Silakan login.");
+      // Redirect clean URL (remove hash)
+      window.location.hash = "";
+    } else {
+      alert(res.error || "Gagal mengaktifkan akun.");
+      window.location.hash = "";
+    }
+  } catch (err) {
+    console.error("Activation error:", err);
+    alert(err.error || "Gagal mengaktifkan akun. Token mungkin kadaluarsa.");
+    window.location.hash = "";
   }
 }
 
@@ -216,6 +269,8 @@ function clearLegacyLocalStorage() {
 // Image validation/compression and crop modal are handled separately when needed.
 // Setup crop event listeners
 function setupCropEventListeners() {
+  cropCanvas = document.getElementById("crop-canvas");
+  if (!cropCanvas) return;
   const canvas = cropCanvas;
 
   canvas.onmousedown = (e) => {
@@ -442,6 +497,53 @@ function applyCrop() {
   if (window.currentCropCallback) {
     window.currentCropCallback(compressedBase64);
   }
+}
+
+// Open Crop Modal
+function openCropModal(file, callback) {
+  const modal = document.getElementById("image-crop-modal");
+  if (!modal) return;
+
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    cropImage = img;
+    const canvas = document.getElementById("crop-canvas");
+    const ctx = canvas.getContext("2d");
+
+    // Fit canvas to image ratio within bounds
+    const maxW = 500;
+    const maxH = 400;
+    let w = img.width;
+    let h = img.height;
+
+    if (w > maxW) { h *= maxW / w; w = maxW; }
+    if (h > maxH) { w *= maxH / h; h = maxH; }
+
+    canvas.width = w;
+    canvas.height = h;
+    ctx.drawImage(img, 0, 0, w, h);
+
+    resetCrop();
+    window.currentCropCallback = callback;
+    modal.classList.remove("hidden");
+  };
+  img.src = url;
+}
+
+// Validate and Compress Image
+function validateAndCompressImage(file) {
+  return new Promise((resolve, reject) => {
+    if (!file) return reject("No file selected");
+    if (!file.type.startsWith("image/")) return reject("File harus berupa gambar!");
+
+    // Limit 5MB
+    if (file.size > 5 * 1024 * 1024) return reject("Ukuran file maksimal 5MB!");
+
+    openCropModal(file, (base64) => {
+      resolve(base64);
+    });
+  });
 }
 
 // Settings functions
@@ -4060,9 +4162,9 @@ function renderDebts() {
       <div class="bg-slate-50 dark:bg-slate-800/50 border border-light-border dark:border-dark-border p-5 rounded-lg flex flex-col transition-colors hover:bg-slate-100 dark:hover:bg-slate-800 group">
          <div class="flex justify-between items-start mb-3">
             <div>
-               <span class="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-${color}-100 text-${color}-600 dark:bg-${color}-500/20 dark:text-${color}-400 uppercase tracking-wider mb-1 inline-block">${badgeText}</span>
-               <h4 class="font-bold text-lg text-slate-900 dark:text-white">${d.person}</h4>
-               <p class="text-xs text-slate-500">${formatDate(d.date)} ${d.notes ? `• ${d.notes}` : ""}</p>
+                <span class="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-${color}-100 text-${color}-600 dark:bg-${color}-500/20 dark:text-${color}-400 uppercase tracking-wider mb-1 inline-block">${badgeText}</span>
+                <h4 class="font-bold text-lg text-slate-900 dark:text-white">${d.name}</h4>
+                <p class="text-xs text-slate-500">${formatDate(d.date)} ${d.notes ? `• ${d.notes}` : ""}</p>
             </div>
             <button onclick="deleteDebt('${d.id}')" class="text-slate-400 hover:text-rose-500 p-1 transition-colors opacity-0 group-hover:opacity-100"><i class="ph ph-trash text-lg"></i></button>
          </div>
@@ -4143,10 +4245,10 @@ if (filterUtangStatus) filterUtangStatus.addEventListener("change", renderDebts)
 
 // Fungsi Cicil / Bayar
 window.payDebt = function (id) {
-  const d = debts.find((x) => x.id === id);
+  const d = debts.find((x) => String(x.id) === String(id));
   if (!d) return;
   const sisa = d.amount - d.paidAmount;
-  const nominal = prompt(`Masukkan nominal pembayaran untuk ${d.person} (Sisa: ¥${sisa.toLocaleString("id-ID")}):`);
+  const nominal = prompt(`Masukkan nominal pembayaran untuk ${d.name} (Sisa: ¥${sisa.toLocaleString("id-ID")}):`);
 
   if (!nominal || isNaN(parseInt(nominal))) return;
   const payAmt = parseInt(nominal);
@@ -4162,7 +4264,7 @@ window.payDebt = function (id) {
   // Opsional: Catat pembayaran ini ke Transaksi utama secara otomatis
   if (confirm("Ingin mencatat pembayaran ini ke Riwayat Transaksi Utama juga?")) {
     const txType = d.type === "utang" ? "expense" : "income";
-    const txTitle = d.type === "utang" ? `Bayar utang ke ${d.person}` : `Terima piutang dari ${d.person}`;
+    const txTitle = d.type === "utang" ? `Bayar utang ke ${d.name}` : `Terima piutang dari ${d.name}`;
     // Masukkan ke Local transaksi secara instan
     saveTransactionToDB(txType, Math.min(payAmt, sisa), "Lainnya", new Date().toISOString().split("T")[0], txTitle, false);
   } else {
@@ -4227,10 +4329,10 @@ function renderBudgets() {
                <div class="w-12 h-12 rounded-lg bg-${statusColor}-100 dark:bg-${statusColor}-500/20 text-${statusColor}-500 flex items-center justify-center text-xl shrink-0 transition-colors">
                   <i class="ph-fill ph-wallet"></i>
                </div>
-               <div>
-                  <h4 class="font-bold text-lg text-slate-900 dark:text-white">${b.name}</h4>
-                  <p class="text-xs font-semibold text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded w-fit mt-1 border border-slate-200 dark:border-slate-700">${b.category}</p>
-               </div>
+                <div>
+                   <h4 class="font-bold text-lg text-slate-900 dark:text-white">Budget ${b.category}</h4>
+                   <p class="text-xs font-semibold text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded w-fit mt-1 border border-slate-200 dark:border-slate-700">${b.category}</p>
+                </div>
             </div>
             <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                <button onclick="editBudget('${b.id}')" title="Edit Budget" class="p-1.5 rounded-lg text-slate-400 hover:text-sky-500 hover:bg-sky-50 dark:hover:bg-sky-500/20 transition-colors"><i class="ph ph-pencil-simple text-lg"></i></button>
@@ -4315,10 +4417,10 @@ if (formBudget) {
 
 // Edit & Hapus
 window.editBudget = function (id) {
-  const b = budgets.find((x) => x.id === id);
+  const b = budgets.find((x) => String(x.id) === String(id));
   if (!b) return;
-  const newLimit = prompt(`Ubah batas maksimal budget untuk ${b.name} (¥):`, b.limit);
-  if (!newLimit || isNaN(parseInt(newLimit)) || parseInt(newLimit) <= 0) return;
+  const newLimit = prompt(`Ubah batas maksimal budget untuk kategori "${b.category}" (¥):`, b.limit);
+  if (newLimit === null || isNaN(parseInt(newLimit)) || parseInt(newLimit) <= 0) return;
   updateBudgetInDB(id, parseInt(newLimit));
   showToast("Memperbarui budget...");
 };
@@ -4378,6 +4480,8 @@ function renderAssets() {
   setEl("asset-total-debt", `- ${formatCurrency(totalUtangKewajiban)}`);
   setEl("net-worth-total", formatCurrency(netWorth));
 
+  console.log("KaneBuddy: rendering", assets.length, "assets");
+
   if (!assets.length) {
     container.innerHTML = `<div class="col-span-full py-12 text-center text-slate-400 border-2 border-dashed border-light-border dark:border-dark-border rounded-3xl"><i class="ph ph-vault text-5xl block mb-3 opacity-40"></i><p class="text-sm">Belum ada aset yang didaftarkan.</p></div>`;
     return;
@@ -4394,21 +4498,25 @@ function renderAssets() {
       else if (a.type.includes("Kendaraan")) icon = "ph-car";
 
       return `
-      <div class="bg-white dark:bg-dark-surface border border-light-border dark:border-dark-border p-5 rounded-3xl flex flex-col shadow-sm hover:shadow-md transition-shadow group relative overflow-hidden">
-         <div class="flex justify-between items-start mb-6">
-            <div class="w-12 h-12 rounded-2xl bg-amber-50 dark:bg-amber-500/10 text-amber-500 flex items-center justify-center text-2xl shrink-0">
+      <div class="bg-white dark:bg-dark-surface border border-light-border dark:border-dark-border p-5 rounded-2xl flex flex-col shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
+         <div class="flex justify-between items-start mb-4">
+            <div class="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-500/10 text-amber-500 flex items-center justify-center text-xl shrink-0">
                <i class="ph-fill ${icon}"></i>
             </div>
-            <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-               <button onclick="updateAssetValue('${a.id}')" title="Update Nilai" class="p-1.5 rounded-lg text-slate-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-500/20 transition-colors"><i class="ph ph-arrows-clockwise text-lg"></i></button>
-               <button onclick="deleteAsset('${a.id}')" title="Hapus Aset" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/20 transition-colors"><i class="ph ph-trash text-lg"></i></button>
+            <div class="flex gap-2">
+               <button onclick="updateAssetValue('${a.id}')" title="Edit" class="text-slate-400 hover:text-blue-500 transition-colors">
+                 <i class="ph ph-pencil-simple text-xl"></i>
+               </button>
+               <button onclick="deleteAsset('${a.id}')" title="Hapus" class="text-slate-400 hover:text-red-500 transition-colors">
+                 <i class="ph ph-trash text-xl"></i>
+               </button>
             </div>
          </div>
 
          <div class="mt-auto">
-            <span class="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 uppercase tracking-wider mb-2 inline-block">${a.type}</span>
-            <h4 class="font-bold text-slate-900 dark:text-white mb-1 truncate">${a.name}</h4>
-            <h3 class="text-xl font-bold text-amber-500">${formatCurrency(a.value)}</h3>
+            <span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 uppercase tracking-tighter mb-1.5 inline-block">${a.type}</span>
+            <h4 class="font-bold text-sm text-slate-900 dark:text-white mb-0.5 truncate">${a.name}</h4>
+            <h3 class="text-lg font-bold text-amber-500">${formatCurrency(a.value)}</h3>
          </div>
       </div>
     `;
@@ -4457,22 +4565,7 @@ if (formAsset) {
   });
 }
 
-// Fungsi Update Nilai & Hapus
-window.updateAssetValue = function (id) {
-  const a = assets.find((x) => x.id == id);
-  if (!a) return;
-  const newValue = prompt(`Update estimasi nilai saat ini untuk ${a.name} (¥):`, a.value);
-  if (newValue === null || isNaN(parseInt(newValue)) || parseInt(newValue) < 0) return;
-
-  updateAssetValueInDB(id, a.name, a.type, parseInt(newValue), a.purchase_date, a.notes);
-  showToast("Memperbarui nilai aset...");
-};
-
-window.deleteAsset = function (id) {
-  if (!confirm("Yakin ingin menghapus aset ini dari pantauan?")) return;
-  deleteAssetFromDB(id);
-  showToast("Menghapus aset...");
-};
+// (Window functions moved to top)
 
 // Render di awal aplikasi dimuat & saat utang diupdate (agar Net Worth sinkron)
 document.addEventListener("DOMContentLoaded", () => {
@@ -4857,7 +4950,7 @@ async function apiCall(endpoint, method = "GET", body = null) {
     const data = await response.json();
 
     if (!response.ok) {
-      if (response.status === 401 || response.status === 403) {
+      if ((response.status === 401 || response.status === 403) && !endpoint.includes("/api/auth/login") && !endpoint.includes("/api/auth/register")) {
         logout();
       }
       throw { status: response.status, ...data };
@@ -5355,8 +5448,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const quickExpense = document.getElementById("quick-expense");
   if (quickIncome) quickIncome.addEventListener("click", () => document.querySelector('[data-view="pemasukan"]').click());
   if (quickExpense) quickExpense.addEventListener("click", () => document.querySelector('[data-view="pengeluaran"]').click());
-  const fab = document.getElementById("fab-add");
-  if (fab) fab.addEventListener("click", () => document.querySelector('[data-view="pemasukan"]').click());
+  // (FAB removed)
 
   // ===== DEFAULT DATES =====
   const todayStr = new Date().toISOString().split("T")[0];
@@ -5417,8 +5509,15 @@ document.addEventListener("DOMContentLoaded", () => {
     if (typeof renderTasks === "function") renderTasks();
     if (typeof renderRecurringList === "function") renderRecurringList();
     if (typeof getAssetsFromDB === "function") getAssetsFromDB();
+    if (typeof setupCropEventListeners === "function") setupCropEventListeners();
+  } else {
+    // Check for activation token in URL hash
+    const hash = window.location.hash;
+    if (hash.startsWith("#activate=")) {
+      const token = hash.split("=")[1];
+      activateAccount(token);
+    }
   }
-
   // ===== RECURRING FORM =====
   const formReq = document.getElementById("form-recurring");
   if (formReq) {

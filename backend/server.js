@@ -4,6 +4,7 @@ const mysql = require("mysql2");
 const crypto = require("crypto");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+const { sendActivationEmail } = require("./emailService");
 require("dotenv").config();
 
 // Constants
@@ -185,21 +186,85 @@ db.getConnection((err, connection) => {
     console.error("Ups! Gagal terhubung ke MySQL. Pastikan XAMPP menyala.", err.message);
     return;
   }
-  const tables = ["transactions", "goals", "bills", "shifts", "tasks", "remittances", "documents", "nenkin"];
+
+  const tableSchemas = {
+    assets: `CREATE TABLE IF NOT EXISTS assets (
+      id int(11) NOT NULL AUTO_INCREMENT,
+      user_id varchar(255) DEFAULT 'default_user',
+      name varchar(255) NOT NULL,
+      type varchar(100) NOT NULL,
+      value decimal(15,2) NOT NULL,
+      purchase_date date DEFAULT NULL,
+      notes text DEFAULT NULL,
+      created_at timestamp NOT NULL DEFAULT current_timestamp(),
+      PRIMARY KEY (id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
+    budgets: `CREATE TABLE IF NOT EXISTS budgets (
+      id int(11) NOT NULL AUTO_INCREMENT,
+      user_id varchar(255) DEFAULT 'default_user',
+      category varchar(100) NOT NULL,
+      amount decimal(15,2) NOT NULL,
+      month varchar(20) NOT NULL,
+      created_at timestamp NOT NULL DEFAULT current_timestamp(),
+      PRIMARY KEY (id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
+    debts: `CREATE TABLE IF NOT EXISTS debts (
+      id int(11) NOT NULL AUTO_INCREMENT,
+      user_id varchar(255) DEFAULT 'default_user',
+      type varchar(50) NOT NULL,
+      name varchar(255) NOT NULL,
+      amount decimal(15,2) NOT NULL,
+      date date NOT NULL,
+      due_date date DEFAULT NULL,
+      notes text DEFAULT NULL,
+      paid tinyint(1) DEFAULT 0,
+      paid_amount decimal(15,2) DEFAULT 0.00,
+      created_at timestamp NOT NULL DEFAULT current_timestamp(),
+      PRIMARY KEY (id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`
+  };
+
+  const otherTables = ["transactions", "goals", "bills", "shifts", "tasks", "remittances", "documents", "nenkin", "categories", "recurring", "users"];
+
+  // 1. Pastikan tabel krusial ada
+  Object.keys(tableSchemas).forEach(table => {
+    connection.query(tableSchemas[table], (err) => {
+      if (err) console.error(`Gagal inisialisasi tabel ${table}:`, err.message);
+    });
+  });
+
+  // 2. Cek user_id di semua tabel
+  const allTables = [...Object.keys(tableSchemas), ...otherTables];
   let completed = 0;
 
-  tables.forEach((table) => {
-    // Cek apakah kolom user_id sudah ada
+  allTables.forEach((table) => {
     connection.query(`SHOW COLUMNS FROM ${table} LIKE 'user_id'`, (err, results) => {
-      if (err || results.length === 0) {
-        // Kolom belum ada, tambahkan
+      if (err) {
+        // ...
+      } else if (results.length === 0) {
         connection.query(`ALTER TABLE ${table} ADD COLUMN user_id VARCHAR(255) DEFAULT 'default_user'`, (alterErr) => {
           if (alterErr) console.warn(`Warning: Could not add user_id to ${table}:`, alterErr.message);
         });
       }
+
+      // Khusus untuk tabel users, cek kolom aktivasi
+      if (table === "users") {
+        const activationCols = [
+          { name: "is_active", type: "TINYINT(1) DEFAULT 0" },
+          { name: "activation_token", type: "VARCHAR(255) DEFAULT NULL" }
+        ];
+        activationCols.forEach(col => {
+          connection.query(`SHOW COLUMNS FROM users LIKE '${col.name}'`, (err, res) => {
+            if (!err && res.length === 0) {
+              connection.query(`ALTER TABLE users ADD COLUMN ${col.name} ${col.type}`);
+            }
+          });
+        });
+      }
+
       completed++;
-      if (completed === tables.length) {
-        console.log("Yeay! Berhasil terhubung ke database ");
+      if (completed === allTables.length) {
+        console.log("Yeay! Berhasil terhubung dan sinkronisasi database ");
       }
     });
   });
@@ -482,9 +547,10 @@ app.delete("/api/documents/:id", authenticateToken, (req, res) => {
 
 // 1. Register User Baru
 app.post("/api/auth/register", async (req, res) => {
-  const { id, name, email, password } = req.body;
+  const { name, email, password } = req.body;
+  const id = crypto.randomBytes(16).toString("hex"); // Generate ID di server
 
-  if (!id || !name || !email || !password) {
+  if (!name || !email || !password) {
     return res.status(400).json({ error: "Semua field diperlukan!" });
   }
 
@@ -499,24 +565,22 @@ app.post("/api/auth/register", async (req, res) => {
 
   try {
     const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
-    const sql = "INSERT INTO users (id, name, email, password) VALUES (?, ?, ?, ?)";
+
+    // [BYPASS AKTIVASI] Langsung is_active=1, tanpa email aktivasi
+    const sql = "INSERT INTO users (id, name, email, password, is_active) VALUES (?, ?, ?, ?, 1)";
     db.query(sql, [id, name, email, hashedPassword], (err) => {
       if (err) {
         if (err.code === "ER_DUP_ENTRY") return res.status(400).json({ error: "Email sudah terdaftar!" });
         return res.status(500).json({ error: err.message });
       }
 
-      // Generate JWT token after successful registration
-      const token = jwt.sign({ id, email, name }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
-
       res.json({
-        message: "Registrasi berhasil!",
-        token,
-        user: { id, name, email },
+        message: "Registrasi berhasil! Silakan login.",
+        requireActivation: false
       });
     });
   } catch (hashError) {
-    return res.status(500).json({ error: "Gagal memproses password." });
+    return res.status(500).json({ error: "Gagal memproses registrasi." });
   }
 });
 
@@ -533,6 +597,14 @@ app.post("/api/auth/login", (req, res) => {
     if (results.length === 0) return res.status(401).json({ error: "Email atau password salah!" });
 
     const user = results[0];
+
+    // Check account activation
+    if (user.is_active === 0) {
+      return res.status(403).json({
+        error: "Akun Anda belum aktif. Silakan cek email Anda untuk melakukan aktivasi.",
+        notActivated: true
+      });
+    }
 
     // Helper to issue token after successful verification
     function issueToken() {
@@ -570,7 +642,28 @@ app.post("/api/auth/login", (req, res) => {
   });
 });
 
-// 3. Update Profil (Nama, Password, Foto)
+// 3. Aktivasi Akun
+app.get("/api/auth/activate/:token", (req, res) => {
+  const { token } = req.params;
+
+  if (!token) return res.status(400).json({ error: "Token aktivasi tidak valid!" });
+
+  const sql = "SELECT id FROM users WHERE activation_token = ?";
+  db.query(sql, [token], (err, results) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (results.length === 0) return res.status(400).json({ error: "Token kadaluarsa atau sudah diaktivasi!" });
+
+    const userId = results[0].id;
+    const updateSql = "UPDATE users SET is_active = 1, activation_token = NULL WHERE id = ?";
+    db.query(updateSql, [userId], (updateErr) => {
+      if (updateErr) return res.status(500).json({ error: "Gagal mengaktifkan akun." });
+
+      res.json({ message: "Akun berhasil diaktifkan! Silakan login.", success: true });
+    });
+  });
+});
+
+// 4. Update Profil (Nama, Password, Foto)
 app.put("/api/auth/profile/:id", authenticateToken, (req, res) => {
   const { name, password, photo } = req.body;
   const userId = req.user.id; // ✅ Dari JWT token
