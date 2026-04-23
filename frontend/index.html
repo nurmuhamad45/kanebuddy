@@ -576,6 +576,12 @@
         <span class="sidebar-text font-medium truncate">Pengaturan</span>
       </a>
 
+      <a href="#" data-view="recurring" title="Transaksi Rutin"
+        class="nav-item flex items-center gap-3 px-4 py-2.5 rounded-full text-slate-500 transition-all duration-200">
+        <i class="ph ph-arrow-clockwise text-xl text-cyan-500 shrink-0"></i>
+        <span class="sidebar-text font-medium truncate">Rutin</span>
+      </a>
+
       <div class="pt-4 mt-2 border-t border-light-border dark:border-dark-border">
         <button onclick="exportModal()" title="Export Laporan"
           class="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-500/10 text-emerald-600 dark:text-emerald-500 transition-colors">
@@ -960,6 +966,10 @@
             </div>
           </div>
 
+
+
+
+
           <!-- Middle Row: Recent Transactions, Financial Goals, Upcoming Bills -->
           <div class="grid grid-cols-1 lg:grid-cols-7 gap-6">
 
@@ -1079,6 +1089,16 @@
                   class="w-full px-4 py-2.5 rounded-lg bg-slate-50 dark:bg-slate-800 border border-light-border dark:border-dark-border focus:outline-none focus:ring-2 focus:ring-emerald-500/50 text-sm cursor-pointer font-medium text-slate-700 dark:text-slate-300" />
               </div>
 
+              <div class="md:col-span-2 lg:col-span-4">
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">🏷️ Tag <span
+                    class="text-xs text-slate-400">(opsional, pisahkan dengan koma)</span></label>
+                <div class="flex gap-2 items-center">
+                  <input id="input-pemasukan-tag" type="text" placeholder="Contoh: gaji, bonus, freelance"
+                    class="flex-1 px-4 py-2.5 rounded-lg bg-slate-50 dark:bg-slate-800 border border-light-border dark:border-dark-border focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-colors text-sm" />
+                </div>
+                <div id="pemasukan-tag-preview" class="flex flex-wrap gap-1 mt-2 min-h-[24px]"></div>
+              </div>
+
               <div class="md:col-span-2 lg:col-span-4 mt-2 flex gap-3">
                 <button type="submit"
                   class="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white py-3 rounded-lg font-medium transition-colors shadow-lg shadow-emerald-500/30">Simpan
@@ -1101,6 +1121,8 @@
                 <input type="text" id="filter-pemasukan-search" placeholder="Cari pemasukan..."
                   class="w-full pl-9 pr-3 py-1.5 text-sm rounded-lg border border-light-border dark:border-dark-border bg-slate-50 dark:bg-slate-800 focus:ring-2 focus:ring-emerald-500/50 focus:outline-none">
               </div>
+              <input type="text" id="filter-pemasukan-tag" placeholder="🏷️ Filter tag..."
+                class="px-2 py-1.5 text-sm rounded-lg border border-light-border dark:border-dark-border bg-slate-50 dark:bg-slate-800 focus:outline-none w-28">
               <select id="filter-pemasukan-sort"
                 class="px-2 py-1.5 text-sm rounded-lg border border-light-border dark:border-dark-border bg-slate-50 dark:bg-slate-800 focus:outline-none">
                 <option value="newest">Terbaru</option>
@@ -1195,6 +1217,13 @@
                   class="w-full px-4 py-2.5 rounded-lg bg-slate-50 dark:bg-slate-800 border border-light-border dark:border-dark-border focus:outline-none focus:ring-2 focus:ring-rose-500/50 transition-colors appearance-none text-sm">
                 </select>
               </div>
+              <div class="md:col-span-2 lg:col-span-4">
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">🏷️ Tag <span
+                    class="text-xs text-slate-400">(opsional, pisahkan dengan koma)</span></label>
+                <input id="input-pengeluaran-tag" type="text" placeholder="Contoh: makanan, transport, darurat"
+                  class="w-full px-4 py-2.5 rounded-lg bg-slate-50 dark:bg-slate-800 border border-light-border dark:border-dark-border focus:outline-none focus:ring-2 focus:ring-rose-500/50 transition-colors text-sm" />
+                <div id="pengeluaran-tag-preview" class="flex flex-wrap gap-1 mt-2 min-h-[24px]"></div>
+              </div>
               <div class="md:col-span-2 lg:col-span-4 mt-2 flex gap-3">
                 <button type="submit"
                   class="flex-1 bg-rose-500 hover:bg-rose-600 text-white py-3 rounded-lg font-medium transition-colors shadow-lg shadow-rose-500/30">Simpan
@@ -1217,6 +1246,8 @@
                 <input type="text" id="filter-pengeluaran-search" placeholder="Cari pengeluaran..."
                   class="w-full pl-9 pr-3 py-1.5 text-sm rounded-lg border border-light-border dark:border-dark-border bg-slate-50 dark:bg-slate-800 focus:ring-2 focus:ring-rose-500/50 focus:outline-none">
               </div>
+              <input type="text" id="filter-pengeluaran-tag" placeholder="🏷️ Filter tag..."
+                class="px-2 py-1.5 text-sm rounded-lg border border-light-border dark:border-dark-border bg-slate-50 dark:bg-slate-800 focus:outline-none w-28">
               <select id="filter-pengeluaran-cat"
                 class="px-2 py-1.5 text-sm rounded-lg border border-light-border dark:border-dark-border bg-slate-50 dark:bg-slate-800 focus:outline-none">
                 <option value="all">Semua Kategori</option>
@@ -1551,6 +1582,38 @@
             <span id="bills-total-label" class="text-sm font-medium text-slate-500"></span>
           </div>
           <div id="bills-list" class="divide-y divide-light-border dark:divide-dark-border"></div>
+        </div>
+
+        <!-- Paid Bills History -->
+        <div class="mt-8">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="font-bold text-slate-900 dark:text-white">Riwayat Tagihan Lunas</h3>
+          </div>
+          <div class="bg-white dark:bg-dark-surface border border-light-border dark:border-dark-border rounded-3xl shadow-sm overflow-hidden">
+             <div class="overflow-x-auto custom-scrollbar">
+                <table class="w-full text-left border-collapse">
+                   <thead>
+                      <tr class="text-xs text-slate-500 dark:text-slate-400 border-b border-light-border dark:border-dark-border bg-slate-50/50 dark:bg-slate-800/20">
+                         <th class="px-6 py-4 font-semibold uppercase tracking-wider">Nama Tagihan</th>
+                         <th class="px-6 py-4 font-semibold uppercase tracking-wider">Kategori</th>
+                         <th class="px-6 py-4 font-semibold uppercase tracking-wider">Jumlah</th>
+                         <th class="px-6 py-4 font-semibold uppercase tracking-wider">Tgl Bayar</th>
+                         <th class="px-6 py-4 font-semibold uppercase tracking-wider">Aksi</th>
+                      </tr>
+                   </thead>
+                   <tbody id="bills-history-list" class="text-sm divide-y divide-light-border dark:divide-dark-border"></tbody>
+                </table>
+             </div>
+             
+             <!-- Pagination -->
+             <div id="bills-history-pagination" class="px-6 py-4 flex justify-between items-center border-t border-light-border dark:border-dark-border bg-slate-50/50 dark:bg-slate-800/20 hidden">
+                <span id="bills-history-page-info" class="text-xs font-medium text-slate-500">Hal 1 dari 1</span>
+                <div class="flex gap-2">
+                   <button id="btn-bills-history-prev" class="px-3 py-1.5 rounded-lg border border-light-border dark:border-dark-border text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">Prev</button>
+                   <button id="btn-bills-history-next" class="px-3 py-1.5 rounded-lg border border-light-border dark:border-dark-border text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">Next</button>
+                </div>
+             </div>
+          </div>
         </div>
       </div>
 
@@ -2480,6 +2543,77 @@
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+
+
+
+      <!-- ===== RECURRING VIEW ===== -->
+      <div id="view-recurring" class="view-section hidden animate-fade-in py-6">
+        <div class="flex items-center justify-between mb-6">
+          <div>
+            <h2 class="text-2xl font-bold text-slate-900 dark:text-white mb-1">Transaksi Rutin</h2>
+            <p class="text-slate-500 dark:text-slate-400 text-sm">Kelola pemasukan & pengeluaran yang berulang setiap
+              bulan.</p>
+          </div>
+          <button onclick="toggleRecurringForm()"
+            class="bg-cyan-500 hover:bg-cyan-600 text-white px-5 py-2.5 rounded-lg font-medium transition-colors shadow-lg shadow-cyan-500/30 flex items-center gap-2">
+            <i class="ph ph-plus text-lg"></i><span class="hidden sm:inline">Tambah Rutin</span>
+          </button>
+        </div>
+
+        <!-- Form Section -->
+        <div id="recurring-form-section" class="hidden mb-6">
+          <div
+            class="bg-white dark:bg-dark-surface border border-light-border dark:border-dark-border rounded-2xl p-6 shadow-sm">
+            <h3 class="font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2"><i
+                class="ph-fill ph-arrow-clockwise text-cyan-500"></i> Tambah Transaksi Rutin</h3>
+            <form id="form-recurring-new" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
+              <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Nama</label>
+                <input id="input-rec-name" type="text" placeholder="Contoh: Gaji Bulanan" required
+                  class="w-full px-4 py-2.5 rounded-lg bg-slate-50 dark:bg-slate-800 border border-light-border dark:border-dark-border focus:outline-none focus:ring-2 focus:ring-cyan-500/50 text-sm" />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Jumlah (¥)</label>
+                <input id="input-rec-amount" type="number" placeholder="0" required min="1"
+                  class="w-full px-4 py-2.5 rounded-lg bg-slate-50 dark:bg-slate-800 border border-light-border dark:border-dark-border focus:outline-none focus:ring-2 focus:ring-cyan-500/50 text-sm" />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Tipe</label>
+                <select id="input-rec-type"
+                  class="w-full px-4 py-2.5 rounded-lg bg-slate-50 dark:bg-slate-800 border border-light-border dark:border-dark-border focus:outline-none focus:ring-2 focus:ring-cyan-500/50 text-sm appearance-none">
+                  <option value="income">Pemasukan</option>
+                  <option value="expense">Pengeluaran</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Kategori</label>
+                <input id="input-rec-category" type="text" placeholder="Gaji / Sewa / Listrik..."
+                  class="w-full px-4 py-2.5 rounded-lg bg-slate-50 dark:bg-slate-800 border border-light-border dark:border-dark-border focus:outline-none focus:ring-2 focus:ring-cyan-500/50 text-sm" />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Tanggal Jatuh Tempo
+                  (1–31)</label>
+                <input id="input-rec-date" type="number" min="1" max="31" placeholder="Misal: 25" required
+                  class="w-full px-4 py-2.5 rounded-lg bg-slate-50 dark:bg-slate-800 border border-light-border dark:border-dark-border focus:outline-none focus:ring-2 focus:ring-cyan-500/50 text-sm" />
+              </div>
+              <div class="flex gap-3">
+                <button type="submit"
+                  class="flex-1 bg-cyan-500 hover:bg-cyan-600 text-white py-2.5 rounded-lg font-medium transition-colors">Simpan</button>
+                <button type="button" onclick="toggleRecurringForm()"
+                  class="px-5 py-2.5 rounded-lg border border-light-border dark:border-dark-border text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-medium transition-colors">Batal</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <!-- Recurring List -->
+        <div
+          class="bg-white dark:bg-dark-surface border border-light-border dark:border-dark-border rounded-2xl p-6 shadow-sm">
+          <div id="recurring-list" class="space-y-3">
+            <p class="text-slate-400 text-sm text-center py-8">Belum ada transaksi rutin.</p>
           </div>
         </div>
       </div>

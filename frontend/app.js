@@ -22,8 +22,9 @@ try {
 }
 
 // DATA ARRAYS
-let transactions = [], goals = [], bills = [], shifts = [], tasks = [],
-  categories = [], recurring = [], debts = [], budgets = [], assets = [],
+let transactions = [], goals = [], bills = [], shifts = [], tasks = [], assets = [], recurring = [];
+let currentCalendarDate = new Date();
+categories = [], recurring = [], debts = [], budgets = [], assets = [],
   remittances = [], documentsData = [], nenkinData = [];
 
 // =====================================================================
@@ -77,6 +78,8 @@ let shiftChartPeriod = "daily"; // daily, weekly, monthly
 let exportPeriod = "weekly";
 let currentTaskView = "list";
 let activeTaskIdForSubtask = null;
+let currentBillsHistoryPage = 1;
+const BILLS_PER_PAGE = 5;
 
 // POMODORO STATE
 let pomoTimer = null;
@@ -773,30 +776,34 @@ function emptyState(msg) {
 // =====================================================================
 // RECURRING TRANSACTIONS LOGIC
 // =====================================================================
-function checkRecurringTransactions() {
-  const today = new Date();
-  const currentMonthKey = `${today.getFullYear()}-${today.getMonth()}`;
-  const currentDate = today.getDate();
-  let hasChanges = false;
+async function checkRecurringTransactions() {
+  if (!currentUser) return;
+  const now = new Date();
+  const monthKey = `${now.getFullYear()}-${now.getMonth() + 1}`;
 
-  recurring.forEach((req) => {
-    if (req.lastProcessedMonth !== currentMonthKey && currentDate >= req.date) {
-      transactions.push({
-        id: uid(),
-        title: req.name + " (Otomatis)",
-        amount: req.amount,
-        type: req.type,
-        category: req.category,
-        date: new Date(today.getFullYear(), today.getMonth(), req.date).toISOString(),
-      });
-      req.lastProcessedMonth = currentMonthKey;
-      hasChanges = true;
+  try {
+    const latestRecurring = await apiCall("/api/recurring");
+    for (const item of latestRecurring) {
+      if (item.lastProcessedMonth !== monthKey) {
+        const today = now.toISOString().split("T")[0];
+        console.log(`Generating recurring transaction for: ${item.name}`);
+
+        await saveTransactionToDB(
+          item.type,
+          item.amount,
+          item.category,
+          today,
+          `[RUTIN] ${item.name}`,
+          `rutin,${item.category}`,
+          true
+        );
+
+        await apiCall(`/api/recurring/${item.id}`, "PUT", { lastProcessedMonth: monthKey });
+      }
     }
-  });
-
-  if (hasChanges) {
-    saveAll();
-    showToast("Langganan rutin ditambahkan ke transaksi bulan ini!", "info");
+    getTransactionsFromDB();
+  } catch (error) {
+    console.error("Gagal proses transaksi rutin:", error);
   }
 }
 
@@ -826,12 +833,41 @@ function renderRecurringList() {
     .join("");
 }
 
-function deleteRecurring(id) {
+async function getRecurringFromDB() {
+  if (!currentUser) return;
+  try {
+    recurring = await apiCall("/api/recurring");
+    renderRecurringList();
+  } catch (error) {
+    console.error("Gagal ambil data rutin:", error);
+  }
+}
+
+async function saveRecurringToDB(name, amount, type, category, date) {
+  if (!currentUser) return;
+  const newReq = { name, amount, type, category, date };
+  try {
+    const result = await apiCall("/api/recurring", "POST", newReq);
+    if (result && !result.error) {
+      showToast("Tagihan rutin berhasil dibuat!");
+      getRecurringFromDB();
+    } else {
+      showToast("Gagal simpan tagihan rutin: " + (result?.error || "Unknown"), "error");
+    }
+  } catch (error) {
+    showToast("Error saat menyimpan tagihan rutin", "error");
+  }
+}
+
+async function deleteRecurring(id) {
   if (!confirm("Hapus tagihan rutin ini?")) return;
-  recurring = recurring.filter((r) => r.id !== id);
-  saveAll();
-  renderRecurringList();
-  showToast("Tagihan rutin dihapus");
+  try {
+    await apiCall(`/api/recurring/${id}`, "DELETE");
+    showToast("Tagihan rutin dihapus");
+    getRecurringFromDB();
+  } catch (error) {
+    showToast("Gagal menghapus tagihan rutin", "error");
+  }
 }
 
 window.showRecurringModal = () => {
@@ -844,6 +880,11 @@ window.showRecurringModal = () => {
 window.closeRecurringModal = () => {
   const m = document.getElementById("modal-recurring");
   if (m) m.classList.add("hidden");
+};
+
+window.toggleRecurringForm = () => {
+  const s = document.getElementById("recurring-form-section");
+  if (s) s.classList.toggle("hidden");
 };
 
 function setEl(id, text) {
@@ -865,7 +906,7 @@ function showToast(msg, type = "success") {
   requestAnimationFrame(() => requestAnimationFrame(() => toast.classList.remove("translate-x-full")));
   setTimeout(() => {
     toast.classList.add("translate-x-full");
-    toast.addEventListener("transitionend", () => toast.remove());
+    setTimeout(() => toast.remove(), 300);
   }, 3000);
 }
 
@@ -1257,12 +1298,18 @@ function renderOvertimeCard() {
 // =====================================================================
 // FILTER & SORT Helpers
 // =====================================================================
-function applyFilterAndSort(list, searchInputId, sortSelectId, catSelectId = null) {
+function applyFilterAndSort(list, searchInputId, sortSelectId, catSelectId = null, tagInputId = null) {
   const search = document.getElementById(searchInputId)?.value.toLowerCase() || "";
   const sort = document.getElementById(sortSelectId)?.value || "newest";
   const cat = catSelectId ? document.getElementById(catSelectId)?.value || "all" : "all";
+  const tag = tagInputId ? document.getElementById(tagInputId)?.value.toLowerCase() || "" : "";
 
-  let result = list.filter((t) => t.title.toLowerCase().includes(search));
+  let result = list.filter((t) => {
+    const matchesSearch = t.title.toLowerCase().includes(search);
+    const matchesTag = tag ? (t.tags && t.tags.toLowerCase().includes(tag)) : true;
+    return matchesSearch && matchesTag;
+  });
+
   if (cat !== "all") result = result.filter((t) => t.category === cat);
 
   result.sort((a, b) => {
@@ -1316,7 +1363,7 @@ function renderPemasukan() {
   if (!tbody) return;
   const pagi = document.getElementById("pemasukan-pagination");
   let list = transactions.filter((t) => t.type === "income");
-  list = applyFilterAndSort(list, "filter-pemasukan-search", "filter-pemasukan-sort");
+  list = applyFilterAndSort(list, "filter-pemasukan-search", "filter-pemasukan-sort", null, "filter-pemasukan-tag");
 
   if (!list.length) {
     tbody.innerHTML = emptyState("Belum ada data pemasukan");
@@ -1335,7 +1382,12 @@ function renderPemasukan() {
     .map(
       (tx) => `<tr class="border-b border-light-border dark:border-dark-border/50 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group">
        <td class="py-3 text-sm text-slate-500">${formatDate(tx.date)}</td>
-        <td class="py-3 font-medium text-slate-900 dark:text-white">${tx.title}</td>
+        <td class="py-3">
+          <div class="font-medium text-slate-900 dark:text-white">${tx.title}</div>
+          <div class="flex flex-wrap gap-1 mt-1">
+            ${(tx.tags || "").split(",").filter(tag => tag.trim()).map(tag => `<span class="px-1.5 py-0.5 rounded text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-medium">#${tag.trim()}</span>`).join("")}
+          </div>
+        </td>
         <td class="py-3 ">${getCategoryBadge(tx.category)}</td>
         <td class="py-3 font-bold text-emerald-500">${formatCurrency(tx.amount)}</td>
         <td class="py-3 "><button onclick="deleteTransaction('${tx.id}')" class="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg hover:bg-rose-100 dark:hover:bg-rose-500/20 text-rose-500"><i class="ph ph-trash text-base"></i></button></td>
@@ -1451,7 +1503,7 @@ function renderPengeluaran() {
   if (!tbody) return;
   const pagi = document.getElementById("pengeluaran-pagination");
   let list = transactions.filter((t) => t.type === "expense");
-  list = applyFilterAndSort(list, "filter-pengeluaran-search", "filter-pengeluaran-sort", "filter-pengeluaran-cat");
+  list = applyFilterAndSort(list, "filter-pengeluaran-search", "filter-pengeluaran-sort", "filter-pengeluaran-cat", "filter-pengeluaran-tag");
 
   if (!list.length) {
     tbody.innerHTML = emptyState("Belum ada data pengeluaran");
@@ -1469,7 +1521,12 @@ function renderPengeluaran() {
     .map(
       (tx) => `<tr class="border-b border-light-border dark:border-dark-border/50 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group">
         <td class="py-3 text-sm text-slate-500">${formatDate(tx.date)}</td>
-        <td class="py-3 font-medium text-slate-900 dark:text-white">${tx.title}</td>
+        <td class="py-3">
+          <div class="font-medium text-slate-900 dark:text-white">${tx.title}</div>
+          <div class="flex flex-wrap gap-1 mt-1">
+            ${(tx.tags || "").split(",").filter(tag => tag.trim()).map(tag => `<span class="px-1.5 py-0.5 rounded text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-medium">#${tag.trim()}</span>`).join("")}
+          </div>
+        </td>
         <td class="py-3">${getCategoryBadge(tx.category, "orange")}</td>
         <td class="py-3  font-bold text-rose-500">- ${formatCurrency(tx.amount)}</td>
         <td class="py-3"><button onclick="deleteTransaction('${tx.id}')" class="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg hover:bg-rose-100 dark:hover:bg-rose-500/20 text-rose-500"><i class="ph ph-trash text-base"></i></button></td>
@@ -1603,6 +1660,35 @@ function renderGoals() {
   el.innerHTML = html;
 }
 
+
+// =====================================================================
+// NOTIFIKASI TAGIHAN
+// =====================================================================
+async function requestNotificationPermission() {
+  if (!("Notification" in window)) return;
+  if (Notification.permission !== "granted" && Notification.permission !== "denied") {
+    await Notification.requestPermission();
+  }
+}
+
+function checkBillsDue() {
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+
+  const today = new Date();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+  const tomorrowStr = tomorrow.toISOString().split("T")[0];
+
+  const dueSoon = bills.filter(b => b.dueDate === tomorrowStr && !b.paid);
+
+  dueSoon.forEach(b => {
+    new Notification("KaneBuddy: Tagihan Besok!", {
+      body: `Tagihan "${b.name}" sebesar ${formatCurrency(b.amount)} jatuh tempo besok.`,
+      icon: "/path/to/icon.png"
+    });
+  });
+}
+
 function showGoalForm() {
   const s = document.getElementById("goal-form-section");
   if (!s) return;
@@ -1616,42 +1702,81 @@ function renderBills() {
   const el = document.getElementById("bills-list");
   if (!el) return;
   const month = new Date().toLocaleString("id-ID", { month: "long", year: "numeric" });
-  const totalUnpaid = bills.filter((b) => !b.paid).reduce((s, b) => s + b.amount, 0);
+  
+  // Filter unpaid bills locally for the active list
+  const unpaidBills = bills.filter(b => !b.paid);
+  const totalUnpaid = unpaidBills.reduce((s, b) => s + b.amount, 0);
+  
   setEl("bills-month-label", `Bulan Ini (${month})`);
   setEl("bills-total-label", `Belum Bayar: ${formatCurrency(totalUnpaid)}`);
-  if (!bills.length) {
-    el.innerHTML = `<div class="p-12 text-center text-slate-400"><i class="ph ph-receipt text-5xl block mb-3 opacity-40"></i><p class="text-sm">Belum ada tagihan</p></div>`;
+
+  if (!unpaidBills.length) {
+    el.innerHTML = `<div class="p-12 text-center text-slate-400"><i class="ph ph-receipt text-5xl block mb-3 opacity-40"></i><p class="text-sm">Belum ada tagihan yang harus dibayar</p></div>`;
     return;
   }
+
   const billIcons = { Internet: "wifi-high", Listrik: "lightning", Air: "drop", Rumah: "house", Kendaraan: "car", Langganan: "play-circle", Lainnya: "receipt" };
   const billColors = { Internet: "blue", Listrik: "amber", Air: "sky", Rumah: "indigo", Kendaraan: "emerald", Langganan: "purple", Lainnya: "slate" };
-  el.innerHTML = bills
+
+  el.innerHTML = unpaidBills
     .map((b) => {
       const icon = billIcons[b.category] || "receipt";
       const color = billColors[b.category] || "slate";
-      return `<div class="p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors ${b.paid ? "opacity-70" : ""}">
+      return `<div class="p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
             <div class="flex items-center gap-4">
                 <div class="w-12 h-12 rounded-lg bg-${color}-100 dark:bg-${color}-500/20 flex items-center justify-center text-${color}-500 border border-${color}-200 dark:border-${color}-500/30">
                     <i class="ph ph-${icon} text-xl"></i>
                 </div>
                 <div>
-                    <h4 class="font-bold text-slate-900 dark:text-white text-lg ${b.paid ? "line-through text-slate-500" : ""}">${b.name}</h4>
-                    <p class="text-sm pt-1 flex items-center gap-1 ${b.paid ? "text-emerald-500" : "text-slate-500"}">
-                        <i class="ph ph-${b.paid ? "check-circle" : "calendar-blank"}"></i>
-                        ${b.paid ? `Sudah Dibayar (${formatDate(b.paidDate)})` : formatDate(b.dueDate)}
+                    <h4 class="font-bold text-slate-900 dark:text-white text-lg">${b.name}</h4>
+                    <p class="text-sm pt-1 flex items-center gap-1 text-slate-500">
+                        <i class="ph ph-calendar-blank"></i>
+                        Jatuh Tempo: ${formatDate(b.dueDate)}
                     </p>
                 </div>
             </div>
             <div class="flex items-center justify-between sm:justify-end gap-4 sm:w-auto w-full">
-                <span class="text-xl font-bold ${b.paid ? "text-slate-500" : "text-slate-900 dark:text-white"}">${formatCurrency(b.amount)}</span>
+                <span class="text-xl font-bold text-slate-900 dark:text-white">${formatCurrency(b.amount)}</span>
                 <div class="flex items-center gap-2">
-                    ${!b.paid ? `<button onclick="markBillPaid('${b.id}')" class="px-4 py-2 text-sm font-medium text-rose-500 bg-rose-50 dark:bg-rose-500/10 rounded-lg hover:bg-rose-500 hover:text-white transition-colors">Bayar</button>` : `<span class="px-4 py-2 text-sm font-medium text-emerald-500 bg-emerald-50 dark:bg-emerald-500/10 rounded-lg">Lunas</span>`}
+                    <button onclick="markBillPaid('${b.id}')" class="px-4 py-2 text-sm font-medium text-rose-500 bg-rose-50 dark:bg-rose-500/10 rounded-lg hover:bg-rose-500 hover:text-white transition-colors">Bayar</button>
                     <button onclick="deleteBill('${b.id}')" class="p-2 rounded-lg hover:bg-rose-100 dark:hover:bg-rose-500/20 text-slate-400 hover:text-rose-500 transition-colors"><i class="ph ph-trash text-base"></i></button>
                 </div>
             </div>
         </div>`;
     })
     .join("");
+}
+
+function renderBillsHistory(data, pagination) {
+  const el = document.getElementById("bills-history-list");
+  if (!el) return;
+
+  if (!data || !data.length) {
+    el.innerHTML = emptyState("Belum ada riwayat tagihan lunas");
+    document.getElementById("bills-history-pagination").classList.add("hidden");
+    return;
+  }
+
+  el.innerHTML = data.map(b => `
+    <tr>
+      <td class="px-6 py-4 font-medium text-slate-900 dark:text-white">${b.name}</td>
+      <td class="px-6 py-4">${getCategoryBadge(b.category || "Lainnya", "amber")}</td>
+      <td class="px-6 py-4 font-bold text-slate-900 dark:text-white">${formatCurrency(b.amount)}</td>
+      <td class="px-6 py-4 text-emerald-600 dark:text-emerald-400 font-medium">
+         <i class="ph ph-check-circle mr-1"></i> ${formatDate(b.paidDate)}
+      </td>
+      <td class="px-6 py-4">
+         <button onclick="deleteBill('${b.id}')" class="p-2 rounded-lg hover:bg-rose-100 dark:hover:bg-rose-500/20 text-slate-400 hover:text-rose-500 transition-colors">
+            <i class="ph ph-trash text-base"></i>
+         </button>
+      </td>
+    </tr>
+  `).join("");
+
+  updatePaginationUI("bills-history", pagination.totalPages, pagination.page, (page) => {
+    currentBillsHistoryPage = page;
+    getBillsHistoryFromDB();
+  });
 }
 
 function renderDashboardBills() {
@@ -1743,24 +1868,37 @@ function renderDashboardTasks() {
     .join("");
 }
 
-function markBillPaid(id) {
-  const b = bills.find((b) => b.id === id);
+async function markBillPaid(id) {
+  const b = bills.find((b) => String(b.id) === String(id));
   if (!b) return;
-  b.paid = true;
-  b.paidDate = new Date().toISOString();
-  transactions.push({ id: uid(), title: b.name + " (Tagihan)", amount: b.amount, category: "Tagihan", type: "expense", date: new Date().toISOString() });
-  saveAll();
-  renderBills();
-  updateDashboard();
-  renderPengeluaran();
-  showToast(`Tagihan "${b.name}" berhasil dibayar!`);
-}
-function deleteBill(id) {
-  if (!confirm("Yakin hapus tagihan ini?")) return;
-  bills = bills.filter((b) => b.id !== id);
-  saveAll();
-  renderBills();
-  showToast("Tagihan dihapus");
+
+  try {
+    // 1. Update bill status di database
+    const result = await apiCall(`/api/bills/${id}/pay`, "PUT");
+    if (result && !result.error) {
+      // 2. Buat transaksi pengeluaran otomatis
+      await apiCall("/api/transactions", "POST", {
+        title: `${b.name} (Tagihan)`,
+        amount: b.amount,
+        category: "Tagihan",
+        type: "expense",
+        date: new Date().toISOString().split("T")[0],
+        description: `Pembayaran tagihan ${b.name}`
+      });
+
+      showToast(`Tagihan "${b.name}" berhasil dibayar!`);
+      
+      // 3. Refresh data
+      if (typeof getBillsFromDB === "function") getBillsFromDB();
+      if (typeof getTransactionsFromDB === "function") getTransactionsFromDB();
+      if (typeof updateDashboard === "function") updateDashboard();
+    } else {
+      showToast("Gagal membayar tagihan: " + (result?.error || "Unknown"), "error");
+    }
+  } catch (error) {
+    console.error("Error marking bill as paid:", error);
+    showToast("Terjadi kesalahan saat membayar tagihan", "error");
+  }
 }
 
 // =====================================================================
@@ -2439,39 +2577,30 @@ document.addEventListener("DOMContentLoaded", () => {
     renderShifts();
     renderTasks();
     renderRecurringList();
+    getRecurringFromDB();
+    requestNotificationPermission();
+    checkBillsDue();
   }
 });
 
 // --- Recurring Transactions Setup --- //
-const formReq = document.getElementById("form-recurring");
-if (formReq) {
-  formReq.addEventListener("submit", (e) => {
+const formReqNew = document.getElementById("form-recurring-new");
+if (formReqNew) {
+  formReqNew.addEventListener("submit", async (e) => {
     e.preventDefault();
-    const name = document.getElementById("input-req-name").value.trim();
-    const amount = parseInt(document.getElementById("input-req-amount").value);
-    const type = document.getElementById("input-req-type").value;
-    const category = document.getElementById("input-req-category").value;
-    const date = parseInt(document.getElementById("input-req-date").value);
+    const name = document.getElementById("input-rec-name").value.trim();
+    const amount = parseInt(document.getElementById("input-rec-amount").value);
+    const type = document.getElementById("input-rec-type").value;
+    const category = document.getElementById("input-rec-category").value;
+    const date = parseInt(document.getElementById("input-rec-date").value);
 
-    if (!name) {
-      showToast("Nama tagihan rutin harus diisi", "error");
-      return;
-    }
-    if (!amount || amount <= 0) {
-      showToast("Jumlah harus > 0", "error");
-      return;
-    }
-    if (!date || date < 1 || date > 31) {
-      showToast("Tanggal jatuh tempo (1-31) tidak valid", "error");
-      return;
-    }
+    if (!name) { showToast("Nama tagihan rutin harus diisi", "error"); return; }
+    if (!amount || amount <= 0) { showToast("Jumlah harus > 0", "error"); return; }
+    if (!date || date < 1 || date > 31) { showToast("Tanggal jatuh tempo (1-31) tidak valid", "error"); return; }
 
-    recurring.push({ id: uid(), name, amount, type, category, date, lastProcessedMonth: null });
-    saveAll();
-    formReq.reset();
-    closeRecurringModal();
-    renderRecurringList();
-    showToast("Tagihan rutin berhasil dibuat!");
+    await saveRecurringToDB(name, amount, type, category, date);
+    formReqNew.reset();
+    if (typeof toggleRecurringForm === "function") toggleRecurringForm();
   });
 }
 
@@ -3026,6 +3155,7 @@ async function getTransactionsFromDB() {
       category: tx.category,
       type: tx.type,
       date: tx.date,
+      tags: tx.tags,
     }));
     saveAll();
     console.log("Data sukses diambil dari MySQL:", transactions);
@@ -3038,9 +3168,9 @@ async function getTransactionsFromDB() {
 }
 
 // 2. Fungsi MENYIMPAN data ke MySQL (Sudah dengan fitur Nominal & Silent)
-async function saveTransactionToDB(type, amount, category, date, description, isSilent = false) {
+async function saveTransactionToDB(type, amount, category, date, description, tags = null, isSilent = false) {
   if (!currentUser) return;
-  const newTransaction = { type, amount, category, date, description };
+  const newTransaction = { type, amount, category, date, description, tags };
   try {
     const result = await apiCall("/api/transactions", "POST", newTransaction);
     if (result && result.error) {
@@ -3188,18 +3318,6 @@ async function deleteGoal(id) {
 }
 
 // --- FUNGSI BILLS ---
-async function getBillsFromDB() {
-  if (!currentUser) return;
-  try {
-    const data = await apiCall("/api/bills");
-    bills = data.map((b) => ({ id: b.id, name: b.name, amount: Number(b.amount), dueDate: b.due_date, category: b.category, paid: b.paid === 1 || b.paid === true, paidDate: b.paid_date }));
-    saveAll();
-    renderBills();
-    renderDashboardBills();
-  } catch (err) {
-    console.error(err);
-  }
-}
 
 async function saveBillToDB(name, amount, due_date, category, paid) {
   if (!currentUser) return;
@@ -3217,14 +3335,17 @@ async function saveBillToDB(name, amount, due_date, category, paid) {
 }
 // Menimpa fungsi deleteBill lama
 async function deleteBill(id) {
-  if (!confirm("Yakin hapus tagihan ini dari database?")) return;
+  if (!confirm("Yakin hapus tagihan ini?")) return;
   if (!currentUser) return;
   try {
-    await apiCall(`/api/bills/${id}`, "DELETE");
+    const result = await apiCall(`/api/bills/${id}`, "DELETE");
+    if (result && result.error) throw new Error(result.error);
     showToast("Tagihan dihapus");
     getBillsFromDB();
+    updateDashboard();
   } catch (err) {
-    console.error(err);
+    console.error("Gagal hapus tagihan:", err);
+    showToast("Gagal menghapus tagihan", "error");
   }
 }
 
@@ -4885,6 +5006,10 @@ window.handleLazyRender = function (view) {
       case "aset":
         if (typeof renderAssets === "function") renderAssets();
         break;
+
+      case "rutin":
+        if (typeof renderRecurringList === "function") renderRecurringList();
+        break;
       case "analisis":
         if (typeof renderAnalisis === "function") renderAnalisis();
         break;
@@ -5153,6 +5278,40 @@ async function getBudgetsFromDB() {
   }
 }
 
+async function getBillsFromDB() {
+  if (!currentUser) return;
+  try {
+    const res = await apiCall("/api/bills?paid=0&limit=100");
+    // Standardize to camelCase: due_date -> dueDate, paid_date -> paidDate
+    bills = res.data.map(b => ({
+      ...b,
+      dueDate: b.due_date,
+      paidDate: b.paid_date
+    }));
+    renderBills();
+    renderDashboardBills();
+    getBillsHistoryFromDB();
+  } catch (e) {
+    console.error("Gagal fetch bills:", e);
+  }
+}
+
+async function getBillsHistoryFromDB() {
+  if (!currentUser) return;
+  try {
+    const res = await apiCall(`/api/bills?paid=1&page=${currentBillsHistoryPage}&limit=${BILLS_PER_PAGE}`);
+    // Standardize to camelCase: due_date -> dueDate, paid_date -> paidDate
+    const mappedData = res.data.map(b => ({
+      ...b,
+      dueDate: b.due_date,
+      paidDate: b.paid_date
+    }));
+    renderBillsHistory(mappedData, res.pagination);
+  } catch (e) {
+    console.error("Gagal fetch bills history:", e);
+  }
+}
+
 // =====================================================================
 // INITIALIZATION
 // =====================================================================
@@ -5295,10 +5454,13 @@ document.addEventListener("DOMContentLoaded", () => {
       const amount = parseFloat(document.getElementById("input-pemasukan-jumlah")?.value) || 0;
       const date = document.getElementById("input-pemasukan-tanggal")?.value || new Date().toISOString().split("T")[0];
       const category = document.getElementById("input-pemasukan-sumber")?.value || "Lainnya";
+      const tags = document.getElementById("input-pemasukan-tag")?.value || "";
       if (!desc) { showToast("Judul tidak boleh kosong", "error"); return; }
       if (!amount || amount <= 0) { showToast("Jumlah harus > 0", "error"); return; }
-      saveTransactionToDB("income", amount, category, date, desc, false);
+      saveTransactionToDB("income", amount, category, date, desc, tags, false);
       formPemasukan.reset();
+      const tagPrev = document.getElementById("pemasukan-tag-preview");
+      if (tagPrev) tagPrev.innerHTML = "";
       const dtEl = document.getElementById("input-pemasukan-tanggal");
       if (dtEl) dtEl.value = new Date().toISOString().split("T")[0];
       const fs = document.getElementById("pemasukan-form-section");
@@ -5314,10 +5476,13 @@ document.addEventListener("DOMContentLoaded", () => {
       const amount = parseInt(document.getElementById("input-pengeluaran-jumlah").value);
       const category = document.getElementById("input-pengeluaran-kategori").value;
       const dateVal = document.getElementById("input-pengeluaran-tanggal").value;
+      const tags = document.getElementById("input-pengeluaran-tag")?.value || "";
       if (!title) { showToast("Judul tidak boleh kosong", "error"); return; }
       if (!amount || amount <= 0) { showToast("Jumlah harus > 0", "error"); return; }
-      saveTransactionToDB("expense", amount, category, dateVal || new Date().toISOString().split("T")[0], title, false);
+      saveTransactionToDB("expense", amount, category, dateVal || new Date().toISOString().split("T")[0], title, tags, false);
       formPengeluaran.reset();
+      const tagPrev = document.getElementById("pengeluaran-tag-preview");
+      if (tagPrev) tagPrev.innerHTML = "";
       document.getElementById("input-pengeluaran-tanggal").value = new Date().toISOString().split("T")[0];
       document.getElementById("pengeluaran-form-section").classList.add("hidden");
     });
@@ -5504,7 +5669,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (typeof renderPemasukan === "function") renderPemasukan();
     if (typeof renderPengeluaran === "function") renderPengeluaran();
     if (typeof renderGoals === "function") renderGoals();
-    if (typeof renderBills === "function") renderBills();
+    if (typeof getBillsFromDB === "function") getBillsFromDB();
     if (typeof renderShifts === "function") renderShifts();
     if (typeof renderTasks === "function") renderTasks();
     if (typeof renderRecurringList === "function") renderRecurringList();
@@ -5518,27 +5683,7 @@ document.addEventListener("DOMContentLoaded", () => {
       activateAccount(token);
     }
   }
-  // ===== RECURRING FORM =====
-  const formReq = document.getElementById("form-recurring");
-  if (formReq) {
-    formReq.addEventListener("submit", (e) => {
-      e.preventDefault();
-      const name = document.getElementById("input-req-name").value.trim();
-      const amount = parseInt(document.getElementById("input-req-amount").value);
-      const type = document.getElementById("input-req-type").value;
-      const category = document.getElementById("input-req-category").value;
-      const date = parseInt(document.getElementById("input-req-date").value);
-      if (!name) { showToast("Nama tagihan rutin harus diisi", "error"); return; }
-      if (!amount || amount <= 0) { showToast("Jumlah harus > 0", "error"); return; }
-      if (!date || date < 1 || date > 31) { showToast("Tanggal jatuh tempo (1-31) tidak valid", "error"); return; }
-      recurring.push({ id: uid(), name, amount, type, category, date, lastProcessedMonth: null });
-      saveAll();
-      formReq.reset();
-      if (typeof closeRecurringModal === "function") closeRecurringModal();
-      if (typeof renderRecurringList === "function") renderRecurringList();
-      showToast("Tagihan rutin berhasil dibuat!");
-    });
-  }
+
 
   // ===== SPENDING FLOW TABS =====
   document.querySelectorAll(".spending-flow-tab").forEach((btn) => {

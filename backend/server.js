@@ -262,6 +262,18 @@ db.getConnection((err, connection) => {
         });
       }
 
+      // Khusus untuk tabel transactions, cek kolom tags
+      if (table === "transactions") {
+        connection.query(`SHOW COLUMNS FROM transactions LIKE 'tags'`, (err, res) => {
+          if (!err && res.length === 0) {
+            connection.query(`ALTER TABLE transactions ADD COLUMN tags VARCHAR(500) DEFAULT NULL`, (alterErr) => {
+              if (alterErr) console.warn("Could not add tags column:", alterErr.message);
+              else console.log("✅ Kolom tags berhasil ditambahkan ke transactions");
+            });
+          }
+        });
+      }
+
       completed++;
       if (completed === allTables.length) {
         console.log("Yeay! Berhasil terhubung dan sinkronisasi database ");
@@ -296,14 +308,18 @@ app.post("/api/transactions", authenticateToken, (req, res) => {
   }
 
   const userId = req.user.id; // ✅ Dari token
-  const { type, amount, category, date, description } = req.body;
-  const sql = "INSERT INTO transactions (user_id, type, amount, category, date, description) VALUES (?, ?, ?, ?, ?, ?)";
+  const { type, amount, category, date, description, tags } = req.body;
+  const sql = "INSERT INTO transactions (user_id, type, amount, category, date, description, tags) VALUES (?, ?, ?, ?, ?, ?, ?)";
 
-  db.query(sql, [userId, type, amount, category, date, description], (err, result) => {
+  db.query(sql, [userId, type, amount, category, date, description, tags || null], (err, result) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json({ message: "Transaksi berhasil disimpan!", id: result.insertId });
   });
 });
+
+// ==========================================
+// 🎯 API UNTUK GOALS (Already defined below)
+// ==========================================
 
 // DELETE: Menghapus transaksi dari database berdasarkan ID
 app.delete("/api/transactions/:id", authenticateToken, (req, res) => {
@@ -367,10 +383,40 @@ app.delete("/api/goals/:id", authenticateToken, (req, res) => {
 // 🧾 API UNTUK BILLS (TAGIHAN)
 // ==========================================
 app.get("/api/bills", authenticateToken, (req, res) => {
-  const userId = req.user.id; // ✅ Dari token
-  db.query("SELECT * FROM bills WHERE user_id = ?", [userId], (err, results) => {
+  const userId = req.user.id;
+  const { paid, page = 1, limit = 10 } = req.query;
+  const offset = (page - 1) * limit;
+  
+  let sql = "SELECT * FROM bills WHERE user_id = ?";
+  let params = [userId];
+  
+  if (paid !== undefined) {
+    sql += " AND paid = ?";
+    params.push(paid === 'true' || paid === '1' ? 1 : 0);
+  }
+  
+  // Get total count for pagination
+  const countSql = sql.replace("SELECT *", "SELECT COUNT(*) as total");
+  db.query(countSql, params, (err, countResults) => {
     if (err) return res.status(500).json({ error: err.message });
-    res.json(results);
+    
+    const total = countResults[0].total;
+    
+    sql += " ORDER BY due_date ASC LIMIT ? OFFSET ?";
+    params.push(Number(limit), Number(offset));
+    
+    db.query(sql, params, (err, results) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({
+        data: results,
+        pagination: {
+          total,
+          page: Number(page),
+          limit: Number(limit),
+          totalPages: Math.ceil(total / limit)
+        }
+      });
+    });
   });
 });
 
@@ -394,6 +440,18 @@ app.delete("/api/bills/:id", authenticateToken, (req, res) => {
   db.query("DELETE FROM bills WHERE id = ? AND user_id = ?", [req.params.id, userId], (err) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json({ message: "Tagihan dihapus!" });
+  });
+});
+
+app.put("/api/bills/:id/pay", authenticateToken, (req, res) => {
+  const userId = req.user.id;
+  const billId = req.params.id;
+  const paidDate = new Date().toISOString().slice(0, 19).replace('T', ' '); // MySQL datetime format
+  
+  db.query("UPDATE bills SET paid = 1, paid_date = ? WHERE id = ? AND user_id = ?", [paidDate, billId, userId], (err, result) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (result.affectedRows === 0) return res.status(404).json({ error: "Tagihan tidak ditemukan" });
+    res.json({ message: "Tagihan berhasil dibayar!", paidDate });
   });
 });
 
@@ -858,7 +916,7 @@ app.post("/api/recurring", authenticateToken, (req, res) => {
 
 app.put("/api/recurring/:id", authenticateToken, (req, res) => {
   const { lastProcessedMonth } = req.body;
-  db.query("UPDATE recurring SET lastProcessedMonth = ? WHERE id = ?", [lastProcessedMonth, req.params.id], (err) => {
+  db.query("UPDATE recurring SET lastProcessedMonth = ? WHERE id = ? AND user_id = ?", [lastProcessedMonth, req.params.id, req.user.id], (err) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json({ message: "Tagihan rutin diupdate!" });
   });
